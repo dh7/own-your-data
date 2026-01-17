@@ -8,7 +8,7 @@ dist/
 auth/
 
 # Logs (keep directory, ignore files)
-logs/*.log
+logs/
 
 # Raw API dumps (sensitive message data!)
 raw-dumps/
