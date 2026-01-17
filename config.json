@@ -1,0 +1,8 @@
+{
+  "paths": {
+    "auth": "./auth",
+    "logs": "./logs",
+    "conversations": "./conversations",
+    "rawDumps": "./raw-dumps"
+  }
+}

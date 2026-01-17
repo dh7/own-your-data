@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Auth/session files (sensitive!)
+auth/
+
+# Logs (keep directory, ignore files)
+logs/*.log
+
+# Raw API dumps (sensitive message data!)
+raw-dumps/
+
+# Local conversation backups
+conversations/
+
+
+# Environment
+.env
+.env.local
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+

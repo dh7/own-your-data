@@ -1,0 +1,112 @@
+[21:01:34.147] Server  ERROR   ⨯ Error: Cannot find module 'next/dist/client/components/builtin/global-not-found'
+Require stack:
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/dev/on-demand-entry-handler.js
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/dev/hot-reloader-turbopack.js
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/lib/router-utils/setup-dev-bundler.js
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/lib/router-server.js
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/lib/start-server.js
+[21:01:34.176] Server  ERROR   Error: Cannot find module 'next/dist/pages/_error'
+Require stack:
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/dev/on-demand-entry-handler.js
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/dev/hot-reloader-turbopack.js
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/lib/router-utils/setup-dev-bundler.js
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/lib/router-server.js
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/lib/start-server.js
+[21:01:34.194] Server  ERROR   ⨯ Error: Cannot find module 'next/dist/pages/_error'
+Require stack:
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/dev/on-demand-entry-handler.js
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/dev/hot-reloader-turbopack.js
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/lib/router-utils/setup-dev-bundler.js
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/lib/router-server.js
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/lib/start-server.js
+[21:01:34.214] Server  ERROR   Error: Cannot find module 'next/dist/pages/_error'
+Require stack:
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/dev/on-demand-entry-handler.js
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/dev/hot-reloader-turbopack.js
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/lib/router-utils/setup-dev-bundler.js
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/lib/router-server.js
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/lib/start-server.js
+[21:01:34.242] Server  ERROR   ⨯ Error: Cannot find module 'next/dist/client/components/builtin/global-not-found'
+Require stack:
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/dev/on-demand-entry-handler.js
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/dev/hot-reloader-turbopack.js
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/lib/router-utils/setup-dev-bundler.js
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/lib/router-server.js
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/lib/start-server.js
+[21:01:34.263] Server  ERROR   Error: Cannot find module 'next/dist/pages/_error'
+Require stack:
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/dev/on-demand-entry-handler.js
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/dev/hot-reloader-turbopack.js
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/lib/router-utils/setup-dev-bundler.js
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/lib/router-server.js
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/lib/start-server.js
+[21:01:34.284] Server  ERROR   ⨯ Error: Cannot find module 'next/dist/pages/_error'
+Require stack:
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/dev/on-demand-entry-handler.js
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/dev/hot-reloader-turbopack.js
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/lib/router-utils/setup-dev-bundler.js
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/lib/router-server.js
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/lib/start-server.js
+[21:01:34.293] Server  ERROR   Error: Cannot find module 'next/dist/pages/_error'
+Require stack:
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/dev/on-demand-entry-handler.js
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/dev/hot-reloader-turbopack.js
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/lib/router-utils/setup-dev-bundler.js
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/lib/router-server.js
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/lib/start-server.js
+[21:01:34.310] Server  ERROR   ⨯ Error: Cannot find module 'next/dist/client/components/builtin/global-not-found'
+Require stack:
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/dev/on-demand-entry-handler.js
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/dev/hot-reloader-turbopack.js
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/lib/router-utils/setup-dev-bundler.js
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/lib/router-server.js
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/lib/start-server.js
+[21:01:34.323] Server  ERROR   Error: Cannot find module 'next/dist/pages/_error'
+Require stack:
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/dev/on-demand-entry-handler.js
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/dev/hot-reloader-turbopack.js
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/lib/router-utils/setup-dev-bundler.js
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/lib/router-server.js
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/lib/start-server.js
+[21:01:34.341] Server  ERROR   ⨯ Error: Cannot find module 'next/dist/pages/_error'
+Require stack:
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/dev/on-demand-entry-handler.js
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/dev/hot-reloader-turbopack.js
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/lib/router-utils/setup-dev-bundler.js
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/lib/router-server.js
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/lib/start-server.js
+[21:01:34.354] Server  ERROR   Error: Cannot find module 'next/dist/pages/_error'
+Require stack:
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/dev/on-demand-entry-handler.js
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/dev/hot-reloader-turbopack.js
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/lib/router-utils/setup-dev-bundler.js
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/lib/router-server.js
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/lib/start-server.js
+[21:01:34.369] Server  ERROR   ⨯ Error: Cannot find module 'next/dist/client/components/builtin/global-not-found'
+Require stack:
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/dev/on-demand-entry-handler.js
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/dev/hot-reloader-turbopack.js
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/lib/router-utils/setup-dev-bundler.js
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/lib/router-server.js
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/lib/start-server.js
+[21:01:34.382] Server  ERROR   Error: Cannot find module 'next/dist/pages/_error'
+Require stack:
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/dev/on-demand-entry-handler.js
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/dev/hot-reloader-turbopack.js
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/lib/router-utils/setup-dev-bundler.js
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/lib/router-server.js
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/lib/start-server.js
+[21:01:34.395] Server  ERROR   ⨯ Error: Cannot find module 'next/dist/pages/_error'
+Require stack:
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/dev/on-demand-entry-handler.js
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/dev/hot-reloader-turbopack.js
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/lib/router-utils/setup-dev-bundler.js
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/lib/router-server.js
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/lib/start-server.js
+[21:01:34.414] Server  ERROR   Error: Cannot find module 'next/dist/pages/_error'
+Require stack:
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/dev/on-demand-entry-handler.js
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/dev/hot-reloader-turbopack.js
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/lib/router-utils/setup-dev-bundler.js
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/lib/router-server.js
+- /Users/dh/code/SecondBrain/WhatsApp/node_modules/next/dist/server/lib/start-server.js

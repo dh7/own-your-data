@@ -1,0 +1,36 @@
+{
+  "name": "whatsapp_connector",
+  "version": "1.0.0",
+  "description": "Local-first WhatsApp collector with GitHub sync",
+  "main": "dist/index.js",
+  "scripts": {
+    "config": "ts-node src/config-server.ts",
+    "get": "ts-node src/get.ts",
+    "process": "ts-node src/process.ts",
+    "sync": "npm run get && npm run process",
+    "build": "tsc",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "whatsapp",
+    "mindcache",
+    "collector"
+  ],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@mindcache/gitstore": "^0.1.0",
+    "baileys": "^7.0.0-rc.9",
+    "express": "^4.21.2",
+    "mindcache": "^3.7.0",
+    "qrcode": "^1.5.4"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.12.0",
+    "@types/qrcode": "^1.5.6",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.3"
+  }
+}
