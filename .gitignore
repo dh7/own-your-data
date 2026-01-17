@@ -3,6 +3,7 @@ node_modules/
 
 # Build output
 dist/
+.next/
 
 # Auth/session files (sensitive!)
 auth/
