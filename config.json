@@ -3,6 +3,7 @@
     "auth": "./auth",
     "logs": "./logs",
     "conversations": "./conversations",
+    "contacts": "./contacts",
     "rawDumps": "./raw-dumps"
   }
 }

@@ -1,5 +1,5 @@
 /**
- * CONFIG server - Web UI for WhatsApp QR and GitHub auth
+ * CONFIG server - Web UI for all connectors
  * Run: npm run config
  */
 
@@ -10,8 +10,8 @@ import { Boom } from '@hapi/boom';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { exec } from 'child_process';
-import { CONFIG_PATHS, saveGitHubConfig, loadGitHubConfig, GitHubConfig, loadConfig, saveConfig, getResolvedPaths, PathsConfig } from './config';
-import { useSingleFileAuthState } from './auth-utils';
+import { saveGitHubConfig, loadGitHubConfig, GitHubConfig, loadConfig, saveConfig, getResolvedPaths, PathsConfig } from './config';
+import { useSingleFileAuthState } from '../shared/auth-utils';
 
 const app = express();
 const PORT = 3456;
@@ -37,7 +37,7 @@ function getHTML(githubConfig: GitHubConfig | null, pathsConfig: PathsConfig): s
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>WhatsApp Collector - Setup</title>
+  <title>SecondBrain Connectors - Setup</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -260,7 +260,7 @@ function getHTML(githubConfig: GitHubConfig | null, pathsConfig: PathsConfig): s
 </head>
 <body>
   <div class="container">
-    <h1>🔧 WhatsApp Collector Setup</h1>
+    <h1>🔧 SecondBrain Connectors</h1>
 
     <!-- Step 1: WhatsApp -->
     <div class="card">
@@ -410,7 +410,12 @@ function getHTML(githubConfig: GitHubConfig | null, pathsConfig: PathsConfig): s
           <div>
             <label for="path-conv">Conversations Directory</label>
             <input type="text" id="path-conv" name="conversations" value="${pathsConfig.conversations}" placeholder="./conversations" />
-            <p class="help">Processed MindCache output</p>
+            <p class="help">Processed messages output</p>
+          </div>
+          <div>
+            <label for="path-contacts">Contacts Directory</label>
+            <input type="text" id="path-contacts" name="contacts" value="${(pathsConfig as any).contacts || './contacts'}" placeholder="./contacts" />
+            <p class="help">Synced contacts output</p>
           </div>
         </div>
         <button type="submit" style="margin-top: 1rem;">💾 Save Paths</button>
@@ -429,9 +434,11 @@ function getHTML(githubConfig: GitHubConfig | null, pathsConfig: PathsConfig): s
       : `<p style="color: #856404;">Complete the steps above first.</p>`
     }
       <p style="margin-top: 1rem;">To collect and process messages, run:</p>
-      <pre style="background: #1e1e1e; color: #d4d4d4; padding: 1rem; border-radius: 8px; margin-top: 0.5rem; overflow-x: auto;">npm run get     # Collect raw data from WhatsApp
-npm run process # Generate output &amp; sync to GitHub</pre>
-      <p class="help" style="margin-top: 0.5rem;">Cron: <code>0 * * * * cd /path/to/project && npm run get && npm run process</code></p>
+      <pre style="background: #1e1e1e; color: #d4d4d4; padding: 1rem; border-radius: 8px; margin-top: 0.5rem; overflow-x: auto;"># WhatsApp
+npm run whatsapp:get      # Collect raw data
+npm run whatsapp:process  # Generate local output
+npm run whatsapp:push     # Sync to GitHub</pre>
+      <p class="help" style="margin-top: 0.5rem;">All 3 are independent. Chain as needed.</p>
     </div>
   </div>
 
@@ -653,7 +660,7 @@ app.get('/', async (req, res) => {
 
 // Save paths config
 app.post('/paths', async (req, res) => {
-  const { auth, logs, rawDumps, conversations } = req.body;
+  const { auth, logs, rawDumps, conversations, contacts } = req.body;
   const config = await loadConfig();
   
   config.paths = {
@@ -661,6 +668,7 @@ app.post('/paths', async (req, res) => {
     logs: logs || './logs',
     rawDumps: rawDumps || './raw-dumps',
     conversations: conversations || './conversations',
+    contacts: contacts || './contacts',
   };
   
   await saveConfig(config);

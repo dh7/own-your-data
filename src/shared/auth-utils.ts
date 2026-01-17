@@ -3,7 +3,7 @@
  * Consolidates all session data into a single JSON file instead of hundreds of files.
  */
 
-import { AuthenticationCreds, AuthenticationState, BufferJSON, initAuthCreds, proto, SignalDataTypeMap } from 'baileys';
+import { AuthenticationCreds, AuthenticationState, BufferJSON, initAuthCreds, SignalDataTypeMap } from 'baileys';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 

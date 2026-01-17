@@ -1,14 +1,14 @@
 /**
- * GET script - Fetch WhatsApp messages and save raw dumps
- * Run: npm run get
+ * WhatsApp GET script - Fetch messages and save raw dumps
+ * Run: npm run whatsapp:get
  * 
- * This only collects raw API data. Use `npm run process` to generate output.
+ * This only collects raw API data. Use `npm run whatsapp:process` to generate output.
  * READ-ONLY: Only fetches messages, never sends
  */
 
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { loadConfig, getResolvedPaths, getTodayString } from './config';
+import { loadConfig, getResolvedPaths, getTodayString } from '../config/config';
 import { collectRawMessages } from './collector';
 
 /**
@@ -55,21 +55,21 @@ async function main() {
     const config = await loadConfig();
     const paths = getResolvedPaths(config);
     
-    const logger = new Logger(paths.logs);
+    const logger = new Logger(paths.whatsappLogs);
 
     logger.log(`🚀 WhatsApp Collector - Fetching messages`);
     logger.log(`📅 Date: ${getTodayString()}`);
-    logger.log(`📂 Raw dumps: ${paths.rawDumps}`);
+    logger.log(`📂 Raw dumps: ${paths.whatsappRawDumps}`);
 
     try {
-        // Collect raw messages (saves to raw-dumps folder)
+        // Collect raw messages (saves to raw-dumps/whatsapp folder)
         const stats = await collectRawMessages({
             sessionPath: paths.whatsappSession,
-            rawDumpsDir: paths.rawDumps,
+            rawDumpsDir: paths.whatsappRawDumps,
         });
 
         logger.log(`📊 Received ${stats.messageCount} messages in ${stats.dumpFiles} dump files`);
-        logger.log('✨ Done! Run "npm run process" to generate output.');
+        logger.log('✨ Done! Run "npm run whatsapp:process" to generate output.');
 
         const logFile = await logger.save();
         console.log(`\n📄 Log saved to: ${logFile}`);

@@ -1,17 +1,15 @@
 /**
- * PROCESS script - Generate MindCache output from raw dumps
- * Run: npm run process
+ * WhatsApp PROCESS script - Generate MindCache output from raw dumps
+ * Run: npm run whatsapp:process
  * 
- * Reads all raw dumps for today, processes them, and:
- * 1. Saves to local conversations folder
- * 2. Syncs to GitHub (if configured)
+ * Reads all raw dumps for today and saves to local conversations folder.
+ * Use `npm run whatsapp:push` to sync to GitHub.
  */
 
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { MindCache } from 'mindcache';
-import { GitStore, MindCacheSync } from '@mindcache/gitstore';
-import { loadConfig, getResolvedPaths, loadGitHubConfig, getTodayString } from './config';
+import { loadConfig, getResolvedPaths, getTodayString } from '../config/config';
 
 interface MessageKey {
     remoteJid: string;
@@ -112,18 +110,18 @@ async function main() {
     const paths = getResolvedPaths(config);
     const today = getTodayString();
 
-    console.log(`📂 Processing raw dumps for: ${today}`);
-    console.log(`   Source: ${paths.rawDumps}/${today}`);
+    console.log(`📂 Processing WhatsApp raw dumps for: ${today}`);
+    console.log(`   Source: ${paths.whatsappRawDumps}/${today}`);
     console.log(`   Output: ${paths.conversations}`);
 
-    const dumpsDir = path.join(paths.rawDumps, today);
+    const dumpsDir = path.join(paths.whatsappRawDumps, today);
 
     // Check if dumps exist
     try {
         await fs.access(dumpsDir);
     } catch {
         console.error(`❌ No raw dumps found for ${today}`);
-        console.log('Run "npm run get" first to collect messages.');
+        console.log('Run "npm run whatsapp:get" first to collect messages.');
         process.exit(1);
     }
 
@@ -259,32 +257,7 @@ async function main() {
     const localPath = path.join(paths.conversations, `whatsapp-${today}.md`);
     await fs.writeFile(localPath, mindcache.toMarkdown(), 'utf-8');
     console.log(`\n✅ Saved locally: ${localPath}`);
-
-    // Sync to GitHub if configured
-    const githubConfig = await loadGitHubConfig();
-    if (githubConfig) {
-        console.log(`\n📤 Syncing to GitHub: ${githubConfig.owner}/${githubConfig.repo}/${githubConfig.path}`);
-
-        try {
-            const gitStore = new GitStore({
-                owner: githubConfig.owner,
-                repo: githubConfig.repo,
-                tokenProvider: async () => githubConfig.token,
-            });
-
-            const sync = new MindCacheSync(gitStore, mindcache, {
-                filePath: `${githubConfig.path}/whatsapp-${today}.md`,
-                instanceName: 'WhatsApp Collector',
-            });
-
-            await sync.save({ message: `Update ${today}: ${conversations.size} conversations` });
-            console.log('✅ Synced to GitHub');
-        } catch (e: any) {
-            console.error(`❌ GitHub sync failed: ${e.message}`);
-        }
-    } else {
-        console.log('\n⚠️  GitHub not configured. Run "npm run config" to set up sync.');
-    }
+    console.log('💡 Run "npm run whatsapp:push" to sync to GitHub');
 
     // Print conversations
     console.log(`\n📝 Conversations:`);

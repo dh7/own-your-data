@@ -8,7 +8,7 @@ import makeWASocket, { DisconnectReason } from 'baileys';
 import { Boom } from '@hapi/boom';
 import * as path from 'path';
 import * as fs from 'fs/promises';
-import { useSingleFileAuthState } from './auth-utils';
+import { useSingleFileAuthState } from '../shared/auth-utils';
 
 export interface CollectorOptions {
     sessionPath: string;

@@ -1,20 +1,22 @@
 {
-  "name": "whatsapp_connector",
+  "name": "secondbrain-connectors",
   "version": "1.0.0",
-  "description": "Local-first WhatsApp collector with GitHub sync",
+  "description": "Local-first data connectors with GitHub sync",
   "main": "dist/index.js",
   "scripts": {
-    "config": "ts-node src/config-server.ts",
-    "get": "ts-node src/get.ts",
-    "process": "ts-node src/process.ts",
-    "sync": "npm run get && npm run process",
+    "config": "ts-node src/config/server.ts",
+    "whatsapp:get": "ts-node src/whatsapp/get.ts",
+    "whatsapp:process": "ts-node src/whatsapp/process.ts",
+    "whatsapp:push": "ts-node src/whatsapp/push.ts",
     "build": "tsc",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
     "whatsapp",
+    "linkedin",
+    "google-contacts",
     "mindcache",
-    "collector"
+    "connector"
   ],
   "author": "",
   "license": "ISC",

@@ -1,5 +1,5 @@
 /**
- * Configuration types and management for the WhatsApp collector
+ * Configuration types and management for all connectors
  */
 
 import * as fs from 'fs/promises';
@@ -10,6 +10,7 @@ const DEFAULT_PATHS = {
     auth: './auth',
     logs: './logs',
     conversations: './conversations',
+    contacts: './contacts',
     rawDumps: './raw-dumps',
 };
 
@@ -17,6 +18,7 @@ export interface PathsConfig {
     auth: string;
     logs: string;
     conversations: string;
+    contacts: string;
     rawDumps: string;
 }
 
@@ -24,12 +26,19 @@ export interface GitHubConfig {
     token: string;
     owner: string;
     repo: string;
-    path: string; // folder in repo, e.g., "whatsapp"
+    path: string; // folder in repo, e.g., "data"
+}
+
+export interface ConnectorStatus {
+    whatsapp: boolean;
+    linkedin: boolean;
+    googleContact: boolean;
 }
 
 export interface AppConfig {
     paths: PathsConfig;
     github?: GitHubConfig;
+    connectors?: ConnectorStatus;
 }
 
 const CONFIG_FILE = path.join(process.cwd(), 'config.json');
@@ -44,6 +53,7 @@ export async function loadConfig(): Promise<AppConfig> {
         return {
             paths: { ...DEFAULT_PATHS, ...config.paths },
             github: config.github,
+            connectors: config.connectors,
         };
     } catch {
         return { paths: DEFAULT_PATHS };
@@ -64,33 +74,44 @@ export function getResolvedPaths(config: AppConfig): {
     auth: string;
     logs: string;
     conversations: string;
+    contacts: string;
     rawDumps: string;
-    whatsappSession: string;
     githubToken: string;
+    // WhatsApp specific
+    whatsappSession: string;
+    whatsappLogs: string;
+    whatsappRawDumps: string;
+    // LinkedIn specific
+    linkedinLogs: string;
+    linkedinRawDumps: string;
+    // Google Contact specific
+    googleContactLogs: string;
+    googleContactRawDumps: string;
 } {
     const root = process.cwd();
     const authDir = path.resolve(root, config.paths.auth);
+    const logsDir = path.resolve(root, config.paths.logs);
+    const rawDumpsDir = path.resolve(root, config.paths.rawDumps);
+    
     return {
         auth: authDir,
-        logs: path.resolve(root, config.paths.logs),
+        logs: logsDir,
         conversations: path.resolve(root, config.paths.conversations),
-        rawDumps: path.resolve(root, config.paths.rawDumps),
-        whatsappSession: path.join(authDir, 'whatsapp-session.json'),
+        contacts: path.resolve(root, config.paths.contacts),
+        rawDumps: rawDumpsDir,
         githubToken: path.join(authDir, 'github-token.json'),
+        // WhatsApp
+        whatsappSession: path.join(authDir, 'whatsapp-session.json'),
+        whatsappLogs: path.join(logsDir, 'whatsapp'),
+        whatsappRawDumps: path.join(rawDumpsDir, 'whatsapp'),
+        // LinkedIn
+        linkedinLogs: path.join(logsDir, 'linkedin'),
+        linkedinRawDumps: path.join(rawDumpsDir, 'linkedin'),
+        // Google Contact
+        googleContactLogs: path.join(logsDir, 'google-contact'),
+        googleContactRawDumps: path.join(rawDumpsDir, 'google-contact'),
     };
 }
-
-/**
- * Legacy: CONFIG_PATHS for backward compatibility
- */
-export const CONFIG_PATHS = {
-    get whatsappSession() {
-        return path.join(process.cwd(), 'auth', 'whatsapp-session.json');
-    },
-    get githubToken() {
-        return path.join(process.cwd(), 'auth', 'github-token.json');
-    },
-};
 
 /**
  * Load GitHub config from auth file
@@ -122,16 +143,4 @@ export async function saveGitHubConfig(ghConfig: GitHubConfig): Promise<void> {
  */
 export function getTodayString(): string {
     return new Date().toISOString().split('T')[0];
-}
-
-/**
- * Generate a key name from contact name and date
- */
-export function generateKey(contactName: string, date: Date): string {
-    const safeName = contactName
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-|-$/g, '');
-    const dateStr = date.toISOString().split('T')[0];
-    return `${safeName}-${dateStr}`;
 }
