@@ -662,7 +662,7 @@ app.get('/', async (req, res) => {
 app.post('/paths', async (req, res) => {
   const { auth, logs, rawDumps, conversations, contacts } = req.body;
   const config = await loadConfig();
-  
+
   config.paths = {
     auth: auth || './auth',
     logs: logs || './logs',
@@ -670,7 +670,7 @@ app.post('/paths', async (req, res) => {
     conversations: conversations || './conversations',
     contacts: contacts || './contacts',
   };
-  
+
   await saveConfig(config);
   console.log('✅ Paths config saved');
   res.redirect('/');
@@ -824,13 +824,13 @@ app.post('/list-repos', async (req, res) => {
       throw new Error(err.message || response.statusText);
     }
 
-    const repos = await response.json() as Array<{ 
-      name: string, 
-      full_name: string, 
+    const repos = await response.json() as Array<{
+      name: string,
+      full_name: string,
       private: boolean,
       permissions?: { push?: boolean }
     }>;
-    
+
     // Filter to only repos where we have push access
     const writableRepos = repos
       .filter(r => r.permissions?.push === true)
@@ -890,20 +890,34 @@ app.post('/shutdown', (req, res) => {
 });
 
 /**
- * Start WhatsApp connection - single connection approach
- * If credentials exist, it auto-connects. If not, shows QR.
+ * Check WhatsApp session status
+ * If session file exists, assume connected (don't actually connect to avoid message loss)
+ * If no session, start connection to get QR code
  */
-async function startWhatsApp() {
+async function checkOrStartWhatsApp() {
   const config = await loadConfig();
   const paths = getResolvedPaths(config);
   const sessionPath = paths.whatsappSession;
-  
-  // Ensure directory for single file exists
+
+  // Check if session file exists
+  try {
+    await fs.access(sessionPath);
+    // Session file exists - assume we're good
+    console.log('✅ WhatsApp session found at:', sessionPath);
+    whatsappConnected = true;
+    connectionStatus = 'connected';
+    return;
+  } catch {
+    // No session file - need to create one via QR scan
+    console.log('📱 No WhatsApp session found. Starting QR flow...');
+  }
+
+  // Only connect if we need to get a QR code
   await fs.mkdir(path.dirname(sessionPath), { recursive: true });
 
   const { state, saveCreds } = await useSingleFileAuthState(sessionPath);
 
-  console.log('📱 Connecting to WhatsApp...');
+  console.log('📱 Connecting to WhatsApp for QR code...');
 
   const sock = makeWASocket({
     auth: state,
@@ -934,7 +948,7 @@ async function startWhatsApp() {
       // Restart required (after QR scan) - create new socket
       if (statusCode === DisconnectReason.restartRequired) {
         console.log('🔄 Restart required - reconnecting...');
-        startWhatsApp();
+        checkOrStartWhatsApp();
         return;
       }
 
@@ -945,22 +959,25 @@ async function startWhatsApp() {
         whatsappConnected = false;
         currentQR = null;
         // Restart to get new QR
-        setTimeout(startWhatsApp, 2000);
+        setTimeout(checkOrStartWhatsApp, 2000);
         return;
       }
 
-      // Other disconnect - try to reconnect
-      if (!whatsappConnected) {
-        console.log('🔄 Reconnecting in 3s...');
-        setTimeout(startWhatsApp, 3000);
+      // Session created successfully - disconnect and mark as ready
+      if (whatsappConnected) {
+        console.log('✅ Session saved. Disconnecting to avoid message consumption.');
+        sock.end(undefined);
       }
     }
 
     if (connection === 'open') {
-      console.log('✅ WhatsApp connected!');
+      console.log('✅ WhatsApp connected! Session saved.');
       whatsappConnected = true;
       connectionStatus = 'connected';
       currentQR = null;
+      // Disconnect after successful auth to avoid consuming messages
+      console.log('🔌 Disconnecting config server (use whatsapp:get to collect messages)');
+      setTimeout(() => sock.end(undefined), 2000);
     }
   });
 }
@@ -999,8 +1016,8 @@ async function main() {
     openBrowser(url);
   });
 
-  // Start WhatsApp connection (single connection - will show QR if needed)
-  startWhatsApp();
+  // Check WhatsApp session (only connects if no session exists)
+  checkOrStartWhatsApp();
 }
 
 main().catch(console.error);

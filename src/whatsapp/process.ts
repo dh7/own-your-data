@@ -1,40 +1,27 @@
 /**
  * WhatsApp PROCESS script - Generate MindCache output from raw dumps
  * Run: npm run whatsapp:process
- * 
- * Reads all raw dumps for today and saves to local conversations folder.
+ *
+ * Reads raw dumps from the last 7 days and generates per-day output files.
+ * Messages are grouped by their actual timestamp date, not collection date.
  * Use `npm run whatsapp:push` to sync to GitHub.
+ *
+ * NOTE: This is primarily for reprocessing old dumps. The collector now
+ * processes messages inline, so you typically don't need to run this
+ * unless you want to regenerate files from raw dumps.
  */
 
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { MindCache } from 'mindcache';
 import { loadConfig, getResolvedPaths, getTodayString } from '../config/config';
+import {
+    type RawMessage,
+    type ProcessedMessage,
+    processRawMessage,
+} from './message-utils';
 
-interface MessageKey {
-    remoteJid: string;
-    remoteJidAlt?: string;
-    fromMe: boolean;
-    id: string;
-    participant?: string;
-}
-
-interface RawMessage {
-    key: MessageKey;
-    messageTimestamp: number;
-    pushName?: string;
-    message?: {
-        conversation?: string;
-        extendedTextMessage?: { text?: string };
-        imageMessage?: { caption?: string };
-        videoMessage?: { caption?: string };
-        reactionMessage?: { text?: string };
-        documentMessage?: { fileName?: string };
-        audioMessage?: object;
-        stickerMessage?: object;
-        pollCreationMessage?: { name?: string };
-    };
-}
+const DAYS_TO_PROCESS = 7;
 
 interface DumpFile {
     messages: RawMessage[];
@@ -43,65 +30,25 @@ interface DumpFile {
 
 interface ConversationEntry {
     displayName: string;
-    messages: Array<{
-        timestamp: number;
-        time: string;
-        sender: string;
-        content: string;
-        isFromMe: boolean;
-    }>;
+    messages: ProcessedMessage[];
 }
 
-/**
- * Sanitize JID to create a valid key
- */
-function jidToKey(jid: string): string {
-    const isGroup = jid.endsWith('@g.us');
-    const id = jid.split('@')[0];
-    return isGroup ? `group-${id}` : id;
-}
+// Messages grouped by date, then by conversation key
+type DayConversations = Map<string, ConversationEntry>;
+type AllDaysData = Map<string, DayConversations>;
 
 /**
- * Extract text content from a message
+ * Get list of date strings for the last N days (including today)
  */
-function getMessageText(message: RawMessage['message']): string {
-    if (!message) return '';
-
-    if (message.conversation) return message.conversation;
-    if (message.extendedTextMessage?.text) return message.extendedTextMessage.text;
-    if (message.imageMessage?.caption) return `[Image] ${message.imageMessage.caption}`;
-    if (message.videoMessage?.caption) return `[Video] ${message.videoMessage.caption}`;
-    if (message.documentMessage?.fileName) return `[Document] ${message.documentMessage.fileName}`;
-    if (message.audioMessage) return '[Audio]';
-    if (message.stickerMessage) return '[Sticker]';
-    if (message.reactionMessage?.text) return `[Reaction: ${message.reactionMessage.text}]`;
-    if (message.pollCreationMessage?.name) return `[Poll] ${message.pollCreationMessage.name}`;
-    if (message.imageMessage) return '[Image]';
-    if (message.videoMessage) return '[Video]';
-
-    return '';
-}
-
-/**
- * Get the normalized JID (prefer phone number over LID)
- */
-function getNormalizedJid(key: MessageKey): string | null {
-    const rawJid = key.remoteJid;
-    const altJid = key.remoteJidAlt;
-
-    if (!rawJid) return null;
-
-    // Groups: use as-is
-    if (rawJid.endsWith('@g.us')) {
-        return rawJid;
+function getLastNDays(n: number): string[] {
+    const dates: string[] = [];
+    const today = new Date();
+    for (let i = 0; i < n; i++) {
+        const d = new Date(today);
+        d.setDate(today.getDate() - i);
+        dates.push(d.toISOString().split('T')[0]);
     }
-
-    // Personal chats: prefer phone number JID over LID
-    if (rawJid.endsWith('@lid') && altJid?.endsWith('@s.whatsapp.net')) {
-        return altJid;
-    }
-
-    return rawJid;
+    return dates;
 }
 
 async function main() {
@@ -109,161 +56,171 @@ async function main() {
     const config = await loadConfig();
     const paths = getResolvedPaths(config);
     const today = getTodayString();
+    const targetDates = new Set(getLastNDays(DAYS_TO_PROCESS));
 
-    console.log(`📂 Processing WhatsApp raw dumps for: ${today}`);
-    console.log(`   Source: ${paths.whatsappRawDumps}/${today}`);
+    console.log(`📂 Processing WhatsApp raw dumps`);
+    console.log(`   Source: ${paths.whatsappRawDumps}`);
     console.log(`   Output: ${paths.conversations}`);
+    console.log(`   Processing messages from last ${DAYS_TO_PROCESS} days: ${Array.from(targetDates).join(', ')}\n`);
 
-    const dumpsDir = path.join(paths.whatsappRawDumps, today);
-
-    // Check if dumps exist
+    // Find all dump directories that exist
+    let dumpDirs: string[] = [];
     try {
-        await fs.access(dumpsDir);
+        const entries = await fs.readdir(paths.whatsappRawDumps, { withFileTypes: true });
+        dumpDirs = entries
+            .filter((e) => e.isDirectory())
+            .map((e) => e.name)
+            .sort()
+            .reverse(); // Most recent first
     } catch {
-        console.error(`❌ No raw dumps found for ${today}`);
+        console.error(`❌ No raw dumps directory found at ${paths.whatsappRawDumps}`);
         console.log('Run "npm run whatsapp:get" first to collect messages.');
         process.exit(1);
     }
 
-    // Read all JSON files
-    const files = await fs.readdir(dumpsDir);
-    const jsonFiles = files.filter((f) => f.endsWith('.json')).sort();
-
-    console.log(`📄 Found ${jsonFiles.length} dump files\n`);
-
-    // Process all messages into conversations
-    const conversations: Map<string, ConversationEntry> = new Map();
-    const seenMessageIds: Set<string> = new Set(); // Deduplication by message ID
-    let totalMessages = 0;
-    let skippedMessages = 0;
-
-    for (const file of jsonFiles) {
-        const filePath = path.join(dumpsDir, file);
-        const content = await fs.readFile(filePath, 'utf-8');
-        const dump: DumpFile = JSON.parse(content);
-
-        console.log(`📥 ${file}: ${dump.messages?.length || 0} messages`);
-
-        if (!dump.messages) continue;
-
-        for (const msg of dump.messages) {
-            totalMessages++;
-
-            // Dedupe by message ID
-            const msgId = msg.key?.id;
-            if (msgId && seenMessageIds.has(msgId)) {
-                skippedMessages++;
-                continue;
-            }
-            if (msgId) seenMessageIds.add(msgId);
-
-            const jid = getNormalizedJid(msg.key);
-            if (!jid) {
-                skippedMessages++;
-                continue;
-            }
-
-            const text = getMessageText(msg.message);
-            if (!text) {
-                skippedMessages++;
-                continue;
-            }
-
-            const timestamp = msg.messageTimestamp * 1000;
-            const msgDate = new Date(timestamp);
-            
-            // Filter to today only
-            const msgDateStr = msgDate.toISOString().split('T')[0];
-            if (msgDateStr !== today) {
-                skippedMessages++;
-                continue;
-            }
-
-            const time = msgDate.toLocaleTimeString('en-US', {
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit',
-                hour12: false,
-            });
-
-            const isFromMe = msg.key.fromMe;
-            const isGroup = jid.endsWith('@g.us');
-            const senderName = isFromMe ? 'Me' : (msg.pushName || 'Unknown');
-
-            const key = jidToKey(jid);
-
-            if (!conversations.has(key)) {
-                let displayName: string;
-                if (isGroup) {
-                    displayName = `Group ${jid.split('@')[0]}`;
-                } else {
-                    displayName = isFromMe ? jid.split('@')[0] : (msg.pushName || jid.split('@')[0]);
-                }
-
-                conversations.set(key, {
-                    displayName,
-                    messages: [],
-                });
-            }
-
-            // Update display name if we get a better one from incoming message
-            if (!isFromMe && msg.pushName && !isGroup) {
-                conversations.get(key)!.displayName = msg.pushName;
-            }
-
-            conversations.get(key)!.messages.push({
-                timestamp,
-                time,
-                sender: senderName,
-                content: text,
-                isFromMe,
-            });
-        }
+    if (dumpDirs.length === 0) {
+        console.error(`❌ No raw dump folders found`);
+        console.log('Run "npm run whatsapp:get" first to collect messages.');
+        process.exit(1);
     }
 
-    // Sort messages by timestamp within each conversation
-    for (const conv of conversations.values()) {
-        conv.messages.sort((a, b) => a.timestamp - b.timestamp);
+    console.log(`📁 Found ${dumpDirs.length} dump folder(s): ${dumpDirs.join(', ')}\n`);
+
+    // Global deduplication by message ID
+    const seenMessageIds: Set<string> = new Set();
+
+    // Messages grouped by date → conversation key → messages
+    const allDays: AllDaysData = new Map();
+    for (const dateStr of Array.from(targetDates)) {
+        allDays.set(dateStr, new Map());
+    }
+
+    let totalMessages = 0;
+    let skippedMessages = 0;
+    let processedMessages = 0;
+
+    // Process all dump directories
+    for (const dumpDir of dumpDirs) {
+        const dumpsPath = path.join(paths.whatsappRawDumps, dumpDir);
+
+        let jsonFiles: string[];
+        try {
+            const files = await fs.readdir(dumpsPath);
+            jsonFiles = files.filter((f) => f.endsWith('.json')).sort();
+        } catch {
+            continue;
+        }
+
+        if (jsonFiles.length === 0) continue;
+
+        console.log(`📁 ${dumpDir}: ${jsonFiles.length} dump file(s)`);
+
+        for (const file of jsonFiles) {
+            const filePath = path.join(dumpsPath, file);
+            const content = await fs.readFile(filePath, 'utf-8');
+            const dump: DumpFile = JSON.parse(content);
+
+            if (!dump.messages) continue;
+
+            for (const msg of dump.messages) {
+                totalMessages++;
+
+                // Dedupe by message ID
+                const msgId = msg.key?.id;
+                if (msgId && seenMessageIds.has(msgId)) {
+                    skippedMessages++;
+                    continue;
+                }
+                if (msgId) seenMessageIds.add(msgId);
+
+                // Process message using shared utility
+                const processed = processRawMessage(msg);
+                if (!processed) {
+                    skippedMessages++;
+                    continue;
+                }
+
+                // Only process messages within our target date range
+                if (!targetDates.has(processed.dateStr)) {
+                    skippedMessages++;
+                    continue;
+                }
+
+                processedMessages++;
+
+                const dayConversations = allDays.get(processed.dateStr)!;
+
+                if (!dayConversations.has(processed.chatKey)) {
+                    dayConversations.set(processed.chatKey, {
+                        displayName: processed.displayName,
+                        messages: [],
+                    });
+                }
+
+                // Update display name if we get a better one from incoming message
+                if (!processed.isFromMe && processed.displayName !== processed.chatKey) {
+                    dayConversations.get(processed.chatKey)!.displayName = processed.displayName;
+                }
+
+                dayConversations.get(processed.chatKey)!.messages.push(processed);
+            }
+        }
     }
 
     console.log(`\n📊 Summary:`);
-    console.log(`   Total messages: ${totalMessages}`);
-    console.log(`   Skipped: ${skippedMessages}`);
-    console.log(`   Conversations: ${conversations.size}`);
+    console.log(`   Total messages scanned: ${totalMessages}`);
+    console.log(`   Skipped (dupes/empty/out of range): ${skippedMessages}`);
+    console.log(`   Processed: ${processedMessages}`);
 
-    // Build MindCache
-    const mindcache = new MindCache();
+    // Save each day's data
+    await fs.mkdir(paths.conversations, { recursive: true });
+    let filesWritten = 0;
 
-    for (const [key, conv] of conversations) {
-        const messageCount = conv.messages.length;
-        const lastTs = conv.messages[conv.messages.length - 1]?.timestamp || 0;
-        const conversationTag = conv.displayName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-        const contentTags = ['whatsapp', today, conversationTag, `lastTs:${lastTs}`];
+    for (const [dateStr, conversations] of Array.from(allDays)) {
+        if (conversations.size === 0) continue;
 
-        // Build conversation content
-        let content = `# ${conv.displayName} - ${today}\n\n`;
-        for (const msg of conv.messages) {
-            content += `*${msg.time}* **${msg.sender}**: ${msg.content}\n\n`;
+        // Sort messages by timestamp within each conversation
+        for (const conv of Array.from(conversations.values())) {
+            conv.messages.sort((a, b) => a.timestamp - b.timestamp);
         }
 
-        mindcache.set_value(key, content, {
-            contentTags,
-            zIndex: messageCount,
-        });
+        // Build MindCache
+        const mindcache = new MindCache();
+
+        for (const [key, conv] of Array.from(conversations)) {
+            const messageCount = conv.messages.length;
+            const lastTs = conv.messages[conv.messages.length - 1]?.timestamp || 0;
+            const conversationTag = conv.displayName
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, '-')
+                .replace(/^-|-$/g, '');
+            const contentTags = ['whatsapp', dateStr, conversationTag, `lastTs:${lastTs}`];
+
+            // Build conversation content
+            let content = `# ${conv.displayName} - ${dateStr}\n\n`;
+            for (const msg of conv.messages) {
+                content += `*${msg.time}* **${msg.sender}**: ${msg.content}\n\n`;
+            }
+
+            mindcache.set_value(key, content, {
+                contentTags,
+                zIndex: messageCount,
+            });
+        }
+
+        const localPath = path.join(paths.conversations, `whatsapp-${dateStr}.md`);
+        await fs.writeFile(localPath, mindcache.toMarkdown(), 'utf-8');
+        filesWritten++;
+
+        const totalMsgs = Array.from(conversations.values()).reduce((sum, c) => sum + c.messages.length, 0);
+        console.log(`\n📅 ${dateStr}: ${conversations.size} conversation(s), ${totalMsgs} message(s)`);
+        for (const [key, conv] of Array.from(conversations)) {
+            console.log(`   ${conv.displayName} (${key}): ${conv.messages.length} messages`);
+        }
     }
 
-    // Save locally
-    await fs.mkdir(paths.conversations, { recursive: true });
-    const localPath = path.join(paths.conversations, `whatsapp-${today}.md`);
-    await fs.writeFile(localPath, mindcache.toMarkdown(), 'utf-8');
-    console.log(`\n✅ Saved locally: ${localPath}`);
+    console.log(`\n✅ Saved ${filesWritten} file(s) to ${paths.conversations}`);
     console.log('💡 Run "npm run whatsapp:push" to sync to GitHub');
-
-    // Print conversations
-    console.log(`\n📝 Conversations:`);
-    for (const [key, conv] of conversations) {
-        console.log(`   ${conv.displayName} (${key}): ${conv.messages.length} messages`);
-    }
 }
 
 main().catch(console.error);

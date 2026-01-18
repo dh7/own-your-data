@@ -1,8 +1,9 @@
 /**
- * WhatsApp GET script - Fetch messages and save raw dumps
+ * WhatsApp GET script - Fetch messages and process inline
  * Run: npm run whatsapp:get
- * 
- * This only collects raw API data. Use `npm run whatsapp:process` to generate output.
+ *
+ * Long-running collector that saves raw API data and processes to MindCache inline.
+ * Press Ctrl+C to stop. Use `npm run whatsapp:push` to sync to GitHub.
  * READ-ONLY: Only fetches messages, never sends
  */
 
@@ -54,22 +55,29 @@ async function main() {
     // Load config
     const config = await loadConfig();
     const paths = getResolvedPaths(config);
-    
+
     const logger = new Logger(paths.whatsappLogs);
 
-    logger.log(`🚀 WhatsApp Collector - Fetching messages`);
-    logger.log(`📅 Date: ${getTodayString()}`);
+    logger.log(`🚀 WhatsApp Collector - Long-running mode`);
+    logger.log(`📅 Started: ${getTodayString()}`);
     logger.log(`📂 Raw dumps: ${paths.whatsappRawDumps}`);
+    logger.log(`📂 Conversations: ${paths.conversations}`);
+    logger.log(`   Press Ctrl+C to stop.\n`);
 
     try {
-        // Collect raw messages (saves to raw-dumps/whatsapp folder)
+        // Collect raw messages and process inline
         const stats = await collectRawMessages({
             sessionPath: paths.whatsappSession,
             rawDumpsDir: paths.whatsappRawDumps,
+            conversationsDir: paths.conversations,
         });
 
-        logger.log(`📊 Received ${stats.messageCount} messages in ${stats.dumpFiles} dump files`);
-        logger.log('✨ Done! Run "npm run whatsapp:process" to generate output.');
+        logger.log(`\n📊 Session Summary:`);
+        logger.log(`   Raw messages received: ${stats.messageCount}`);
+        logger.log(`   Dump files created: ${stats.dumpFiles}`);
+        logger.log(`   Messages processed: ${stats.processedMessages}`);
+        logger.log(`   Duplicates skipped: ${stats.skippedDupes}`);
+        logger.log('✨ Done! Run "npm run whatsapp:push" to sync to GitHub.');
 
         const logFile = await logger.save();
         console.log(`\n📄 Log saved to: ${logFile}`);
@@ -84,3 +92,4 @@ async function main() {
 }
 
 main();
+
