@@ -4,7 +4,7 @@
  * READ-ONLY: Only fetches messages, never sends
  */
 
-import makeWASocket, { DisconnectReason, fetchLatestBaileysVersion, type WAMessage } from 'baileys';
+import makeWASocket, { DisconnectReason, fetchLatestBaileysVersion, downloadMediaMessage, type WAMessage } from 'baileys';
 import { Boom } from '@hapi/boom';
 import * as path from 'path';
 import * as fs from 'fs/promises';
@@ -31,6 +31,69 @@ const seenMessageIds = new Set<string>();
 // Accumulated messages per day for MindCache generation
 type DayMessages = Map<string, ProcessedMessage[]>; // chatKey -> messages
 const messagesByDay = new Map<string, DayMessages>(); // dateStr -> conversations
+
+/**
+ * Get file extension for media type
+ */
+function getMediaExtension(msg: WAMessage): string | null {
+    const message = msg.message;
+    if (!message) return null;
+
+    if (message.imageMessage) return 'jpg';
+    if (message.videoMessage) return 'mp4';
+    if (message.audioMessage) return 'ogg';
+    if (message.stickerMessage) return 'webp';
+    if (message.documentMessage) {
+        const fileName = message.documentMessage.fileName;
+        if (fileName) {
+            const parts = fileName.split('.');
+            if (parts.length > 1) return parts.pop()!;
+        }
+        return 'bin';
+    }
+    return null;
+}
+
+/**
+ * Download and save media from a message
+ * Returns the relative path to the saved file, or null if no media
+ */
+async function downloadAndSaveMedia(
+    msg: WAMessage,
+    conversationsDir: string,
+    dateStr: string
+): Promise<string | null> {
+    const ext = getMediaExtension(msg);
+    if (!ext) return null;
+
+    const msgId = msg.key?.id;
+    if (!msgId) return null;
+
+    try {
+        const buffer = await downloadMediaMessage(msg, 'buffer', {});
+        if (!buffer) return null;
+
+        // Create media directory for this date
+        const mediaDir = path.join(conversationsDir, 'media', dateStr);
+        await fs.mkdir(mediaDir, { recursive: true });
+
+        // Generate filename with timestamp
+        const timestamp = msg.messageTimestamp
+            ? (typeof msg.messageTimestamp === 'number' ? msg.messageTimestamp : Number(msg.messageTimestamp))
+            : Math.floor(Date.now() / 1000);
+        const filename = `${timestamp}-${msgId}.${ext}`;
+        const filepath = path.join(mediaDir, filename);
+
+        await fs.writeFile(filepath, buffer as Buffer);
+        console.log(`📷 Saved media: media/${dateStr}/${filename}`);
+
+        // Return relative path from conversations folder
+        return `./media/${dateStr}/${filename}`;
+    } catch (error) {
+        console.error(`⚠️ Failed to download media for ${msgId}:`, error);
+        return null;
+    }
+}
 
 /**
  * Save raw API data to file
@@ -127,8 +190,17 @@ async function processMessages(
         }
         seenMessageIds.add(msgId);
 
-        // Process the message
-        const processed = processRawMessage(msg as unknown as RawMessage);
+        // Get dateStr for media download path
+        const timestamp = msg.messageTimestamp
+            ? (typeof msg.messageTimestamp === 'number' ? msg.messageTimestamp : Number(msg.messageTimestamp))
+            : Math.floor(Date.now() / 1000);
+        const dateStr = new Date(timestamp * 1000).toISOString().split('T')[0];
+
+        // Download media first (if any)
+        const mediaPath = await downloadAndSaveMedia(msg, conversationsDir, dateStr);
+
+        // Process the message with media path
+        const processed = processRawMessage(msg as unknown as RawMessage, mediaPath || undefined);
         if (!processed) continue;
 
         stats.processedMessages++;

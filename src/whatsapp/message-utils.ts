@@ -38,16 +38,43 @@ export interface ProcessedMessage {
     chatKey: string;
     displayName: string;
     dateStr: string;
+    mediaPath?: string;
 }
 
 /**
  * Extract text content from a message
+ * If mediaPath is provided, formats media as markdown links
  */
-export function getMessageText(message: RawMessage['message']): string {
+export function getMessageText(message: RawMessage['message'], mediaPath?: string): string {
     if (!message) return '';
 
+    // Text messages
     if (message.conversation) return message.conversation;
     if (message.extendedTextMessage?.text) return message.extendedTextMessage.text;
+
+    // Media messages with paths
+    if (mediaPath) {
+        const caption = message.imageMessage?.caption
+            || message.videoMessage?.caption
+            || '';
+        if (message.imageMessage) {
+            return caption ? `![Image](${mediaPath}) ${caption}` : `![Image](${mediaPath})`;
+        }
+        if (message.videoMessage) {
+            return caption ? `[Video](${mediaPath}) ${caption}` : `[Video](${mediaPath})`;
+        }
+        if (message.audioMessage) {
+            return `[Audio](${mediaPath})`;
+        }
+        if (message.stickerMessage) {
+            return `![Sticker](${mediaPath})`;
+        }
+        if (message.documentMessage?.fileName) {
+            return `[${message.documentMessage.fileName}](${mediaPath})`;
+        }
+    }
+
+    // Media without paths (fallback)
     if (message.imageMessage?.caption) return `[Image] ${message.imageMessage.caption}`;
     if (message.videoMessage?.caption) return `[Video] ${message.videoMessage.caption}`;
     if (message.documentMessage?.fileName) return `[Document] ${message.documentMessage.fileName}`;
@@ -106,15 +133,17 @@ export function getDisplayName(jid: string, pushName: string | undefined, isFrom
 /**
  * Process a raw message into a ProcessedMessage
  * Returns null if message should be skipped (no content, invalid JID, etc.)
+ * @param msg - The raw message to process
+ * @param mediaPath - Optional path to downloaded media file
  */
-export function processRawMessage(msg: RawMessage): ProcessedMessage | null {
+export function processRawMessage(msg: RawMessage, mediaPath?: string): ProcessedMessage | null {
     const msgId = msg.key?.id;
     if (!msgId) return null;
 
     const jid = getNormalizedJid(msg.key);
     if (!jid) return null;
 
-    const text = getMessageText(msg.message);
+    const text = getMessageText(msg.message, mediaPath);
     if (!text) return null;
 
     const timestamp = msg.messageTimestamp * 1000;
@@ -142,5 +171,6 @@ export function processRawMessage(msg: RawMessage): ProcessedMessage | null {
         chatKey: jidToKey(jid),
         displayName: getDisplayName(jid, msg.pushName, isFromMe),
         dateStr,
+        mediaPath,
     };
 }
