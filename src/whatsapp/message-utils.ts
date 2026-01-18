@@ -131,24 +131,67 @@ export function getDisplayName(jid: string, pushName: string | undefined, isFrom
 }
 
 /**
+ * Get file extension for media type
+ */
+export function getMediaExtension(message: RawMessage['message']): string | null {
+    if (!message) return null;
+
+    if (message.imageMessage) return 'jpg';
+    if (message.videoMessage) return 'mp4';
+    if (message.audioMessage) return 'ogg';
+    if (message.stickerMessage) return 'webp';
+    if (message.documentMessage) {
+        const fileName = message.documentMessage.fileName;
+        if (fileName) {
+            const parts = fileName.split('.');
+            if (parts.length > 1) return parts.pop()!;
+        }
+        return 'bin';
+    }
+    return null;
+}
+
+/**
+ * Get expected media path for a message
+ * Returns relative path: ./media/YYYY-MM-DD/timestamp-id.ext
+ */
+export function getExpectedMediaPath(msg: RawMessage, dateStr: string): string | null {
+    const ext = getMediaExtension(msg.message);
+    if (!ext) return null;
+
+    const msgId = msg.key?.id;
+    if (!msgId) return null;
+
+    const timestamp = msg.messageTimestamp
+        ? (typeof msg.messageTimestamp === 'number' ? msg.messageTimestamp : Number(msg.messageTimestamp))
+        : 0;
+
+    // Use the timestamp from the message (which is what collector uses for filename)
+    // Note: collector uses msg.messageTimestamp
+    return `./media/${dateStr}/${timestamp}-${msgId}.${ext}`;
+}
+
+/**
  * Process a raw message into a ProcessedMessage
  * Returns null if message should be skipped (no content, invalid JID, etc.)
  * @param msg - The raw message to process
- * @param mediaPath - Optional path to downloaded media file
  */
-export function processRawMessage(msg: RawMessage, mediaPath?: string): ProcessedMessage | null {
+export function processRawMessage(msg: RawMessage): ProcessedMessage | null {
     const msgId = msg.key?.id;
     if (!msgId) return null;
 
     const jid = getNormalizedJid(msg.key);
     if (!jid) return null;
 
-    const text = getMessageText(msg.message, mediaPath);
-    if (!text) return null;
-
     const timestamp = msg.messageTimestamp * 1000;
     const msgDate = new Date(timestamp);
     const dateStr = msgDate.toISOString().split('T')[0];
+
+    // Derive media path automatically
+    const mediaPath = getExpectedMediaPath(msg, dateStr);
+
+    const text = getMessageText(msg.message, mediaPath || undefined);
+    if (!text) return null;
 
     const time = msgDate.toLocaleTimeString('en-US', {
         hour: '2-digit',
@@ -171,6 +214,6 @@ export function processRawMessage(msg: RawMessage, mediaPath?: string): Processe
         chatKey: jidToKey(jid),
         displayName: getDisplayName(jid, msg.pushName, isFromMe),
         dateStr,
-        mediaPath,
+        mediaPath: mediaPath || undefined,
     };
 }

@@ -8,9 +8,8 @@ import makeWASocket, { DisconnectReason, fetchLatestBaileysVersion, downloadMedi
 import { Boom } from '@hapi/boom';
 import * as path from 'path';
 import * as fs from 'fs/promises';
-import { MindCache } from 'mindcache';
 import { useSingleFileAuthState } from '../shared/auth-utils';
-import { processRawMessage, type RawMessage, type ProcessedMessage } from './message-utils';
+import { getMediaExtension } from './message-utils';
 
 export interface CollectorOptions {
     sessionPath: string;
@@ -28,32 +27,6 @@ export interface CollectorStats {
 // In-memory deduplication
 const seenMessageIds = new Set<string>();
 
-// Accumulated messages per day for MindCache generation
-type DayMessages = Map<string, ProcessedMessage[]>; // chatKey -> messages
-const messagesByDay = new Map<string, DayMessages>(); // dateStr -> conversations
-
-/**
- * Get file extension for media type
- */
-function getMediaExtension(msg: WAMessage): string | null {
-    const message = msg.message;
-    if (!message) return null;
-
-    if (message.imageMessage) return 'jpg';
-    if (message.videoMessage) return 'mp4';
-    if (message.audioMessage) return 'ogg';
-    if (message.stickerMessage) return 'webp';
-    if (message.documentMessage) {
-        const fileName = message.documentMessage.fileName;
-        if (fileName) {
-            const parts = fileName.split('.');
-            if (parts.length > 1) return parts.pop()!;
-        }
-        return 'bin';
-    }
-    return null;
-}
-
 /**
  * Download and save media from a message
  * Returns the relative path to the saved file, or null if no media
@@ -63,7 +36,7 @@ async function downloadAndSaveMedia(
     conversationsDir: string,
     dateStr: string
 ): Promise<string | null> {
-    const ext = getMediaExtension(msg);
+    const ext = getMediaExtension((msg.message || undefined) as any);
     if (!ext) return null;
 
     const msgId = msg.key?.id;
@@ -130,60 +103,19 @@ async function saveRawDump(
 }
 
 /**
- * Update MindCache file for a specific day
- */
-async function updateMindCacheForDay(conversationsDir: string, dateStr: string): Promise<void> {
-    const dayMessages = messagesByDay.get(dateStr);
-    if (!dayMessages || dayMessages.size === 0) return;
-
-    const mindcache = new MindCache();
-
-    for (const [chatKey, messages] of dayMessages) {
-        if (messages.length === 0) continue;
-
-        // Sort by timestamp
-        messages.sort((a, b) => a.timestamp - b.timestamp);
-
-        const displayName = messages[0].displayName;
-        const lastTs = messages[messages.length - 1].timestamp;
-        const conversationTag = displayName
-            .toLowerCase()
-            .replace(/[^a-z0-9]+/g, '-')
-            .replace(/^-|-$/g, '');
-        const contentTags = ['whatsapp', dateStr, conversationTag, `lastTs:${lastTs}`];
-
-        let content = `# ${displayName} - ${dateStr}\n\n`;
-        for (const msg of messages) {
-            content += `*${msg.time}* **${msg.sender}**: ${msg.content}\n\n`;
-        }
-
-        mindcache.set_value(chatKey, content, {
-            contentTags,
-            zIndex: messages.length,
-        });
-    }
-
-    await fs.mkdir(conversationsDir, { recursive: true });
-    const localPath = path.join(conversationsDir, `whatsapp-${dateStr}.md`);
-    await fs.writeFile(localPath, mindcache.toMarkdown(), 'utf-8');
-    console.log(`📝 Updated: whatsapp-${dateStr}.md (${dayMessages.size} conversations)`);
-}
-
-/**
- * Process incoming messages: dedupe, add to accumulator, update MindCache
+ * Process incoming messages: dedupe, download media, then trigger reprocessing
  */
 async function processMessages(
     messages: WAMessage[],
     conversationsDir: string,
     stats: CollectorStats
 ): Promise<void> {
-    const updatedDates = new Set<string>();
-
+    // 1. Download media for all messages first
     for (const msg of messages) {
         const msgId = msg.key?.id;
         if (!msgId) continue;
 
-        // Dedupe
+        // Dedupe check for downloading
         if (seenMessageIds.has(msgId)) {
             stats.skippedDupes++;
             continue;
@@ -196,31 +128,20 @@ async function processMessages(
             : Math.floor(Date.now() / 1000);
         const dateStr = new Date(timestamp * 1000).toISOString().split('T')[0];
 
-        // Download media first (if any)
-        const mediaPath = await downloadAndSaveMedia(msg, conversationsDir, dateStr);
-
-        // Process the message with media path
-        const processed = processRawMessage(msg as unknown as RawMessage, mediaPath || undefined);
-        if (!processed) continue;
+        // Download media (ignoring return value as processor derives path)
+        await downloadAndSaveMedia(msg, conversationsDir, dateStr);
 
         stats.processedMessages++;
-
-        // Add to accumulator
-        if (!messagesByDay.has(processed.dateStr)) {
-            messagesByDay.set(processed.dateStr, new Map());
-        }
-        const dayMessages = messagesByDay.get(processed.dateStr)!;
-        if (!dayMessages.has(processed.chatKey)) {
-            dayMessages.set(processed.chatKey, []);
-        }
-        dayMessages.get(processed.chatKey)!.push(processed);
-
-        updatedDates.add(processed.dateStr);
     }
 
-    // Update MindCache files for affected dates
-    for (const dateStr of updatedDates) {
-        await updateMindCacheForDay(conversationsDir, dateStr);
+    // 2. Trigger reprocessing of the last 3 days from raw dumps
+    // This ensures consistency by reconstructing from the source of truth (files)
+    try {
+        const config = await import('../config/config').then(m => m.loadConfig());
+        const { processRawDumps } = await import('./processor');
+        await processRawDumps(config, 3);
+    } catch (e) {
+        console.error('⚠️ Error during reprocessing:', e);
     }
 }
 
