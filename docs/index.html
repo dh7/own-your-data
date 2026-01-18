@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Own Your Data</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap');
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Space Mono', monospace;
+            background: #0a0a0a;
+            color: #e0e0e0;
+            min-height: 100vh;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 4rem 2rem;
+        }
+
+        .warning {
+            background: linear-gradient(135deg, #ff4444 0%, #cc0000 100%);
+            color: white;
+            padding: 2rem;
+            border-radius: 0;
+            margin-bottom: 3rem;
+            border-left: 6px solid #ffcc00;
+        }
+
+        .warning h2 {
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .warning p {
+            font-size: 0.95rem;
+            opacity: 0.95;
+        }
+
+        .philosophy {
+            background: #111;
+            border: 1px solid #333;
+            padding: 3rem;
+            margin-bottom: 3rem;
+        }
+
+        .philosophy h2 {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: #ffcc00;
+            margin-bottom: 1.5rem;
+        }
+
+        .philosophy p {
+            font-size: 1.1rem;
+            color: #aaa;
+            margin-bottom: 1rem;
+        }
+
+        .philosophy .highlight {
+            color: #ffcc00;
+            font-weight: 700;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            color: #fff;
+            text-transform: uppercase;
+            letter-spacing: 4px;
+        }
+
+        .subtitle {
+            color: #666;
+            font-size: 1rem;
+            margin-bottom: 3rem;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+        }
+
+        h3 {
+            color: #ffcc00;
+            font-size: 1rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 1.5rem;
+            margin-top: 3rem;
+        }
+
+        .connectors {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 3rem;
+        }
+
+        .connector {
+            background: #111;
+            border: 1px solid #222;
+            padding: 1.5rem;
+            transition: border-color 0.2s;
+        }
+
+        .connector:hover {
+            border-color: #ffcc00;
+        }
+
+        .connector h4 {
+            font-size: 1.1rem;
+            margin-bottom: 0.5rem;
+            color: #fff;
+        }
+
+        .connector .status {
+            font-size: 0.8rem;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .connector .status.working {
+            color: #4caf50;
+        }
+
+        .connector .status.planned {
+            color: #ff9800;
+        }
+
+        .commands {
+            background: #0d0d0d;
+            border: 1px solid #222;
+            padding: 1.5rem;
+            font-size: 0.9rem;
+            overflow-x: auto;
+        }
+
+        .commands code {
+            color: #4caf50;
+        }
+
+        .commands .comment {
+            color: #666;
+        }
+
+        .principles {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+
+        .principle {
+            padding: 1rem;
+            border-left: 2px solid #333;
+        }
+
+        .principle strong {
+            color: #ffcc00;
+            display: block;
+            margin-bottom: 0.25rem;
+        }
+
+        .principle span {
+            color: #888;
+            font-size: 0.85rem;
+        }
+
+        footer {
+            margin-top: 4rem;
+            padding-top: 2rem;
+            border-top: 1px solid #222;
+            color: #444;
+            font-size: 0.8rem;
+            text-align: center;
+        }
+
+        a {
+            color: #ffcc00;
+            text-decoration: none;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+
+
+        .connector {
+            cursor: pointer;
+        }
+
+        .connector.active {
+            border-color: #ffcc00;
+            background: #1a1a1a;
+        }
+
+        #instructions-container {
+            margin-top: 3rem;
+            animation: fadeIn 0.3s ease-in-out;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .instruction-block {
+            display: none;
+        }
+
+        .instruction-block.active {
+            display: block;
+        }
+
+        .step-list {
+            list-style: none;
+            counter-reset: step;
+        }
+
+        .step-list li {
+            position: relative;
+            padding-left: 2rem;
+            margin-bottom: 1rem;
+            color: #ccc;
+        }
+
+        .step-list li::before {
+            counter-increment: step;
+            content: counter(step);
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 1.5rem;
+            height: 1.5rem;
+            background: #222;
+            color: #ffcc00;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 1.5rem;
+            font-size: 0.8rem;
+            font-weight: bold;
+        }
+
+        .external-link-icon {
+            display: inline-block;
+            margin-left: 0.3rem;
+            font-size: 0.8em;
+            vertical-align: text-top;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>Own Your Data</h1>
+        <p class="subtitle">Own Your Data, Own Your Life</p>
+
+        <div class="warning">
+            <h2>⚠️ Experimental — Use at your own risk</h2>
+        </div>
+
+        <div class="philosophy">
+            <h2>Imagine losing access to <span id="account-cycle"
+                    style="color: #ffcc00; border-bottom: 2px solid #ffcc00;">your account</span>.</h2>
+            <p>If that thought is scary, it's probably because that account holds things that are important to you.</p>
+            <p>Do you fear losing something? <span class="highlight">Backup your data!</span></p>
+        </div>
+
+        <h3>Scope</h3>
+        <p style="color: #888; margin-bottom: 2rem;">
+            A collection of tools to back up your data from platforms that hold it hostage.
+            Store everything locally. Optionally sync to your own GitHub repository.
+        </p>
+
+        <h3>Supported platforms</h3>
+        <div class="connectors">
+            <div class="connector active" id="connector-whatsapp" onclick="showInstruction('whatsapp')">
+                <h4>📱 WhatsApp</h4>
+                <p class="status working">✓ Automated</p>
+                <p style="color: #666; font-size: 0.85rem; margin-top: 0.5rem;">Messages via Baileys</p>
+            </div>
+            <div class="connector" id="connector-linkedin" onclick="showInstruction('linkedin')">
+                <h4>💼 LinkedIn</h4>
+                <p class="status planned">◯ Manual</p>
+                <p style="color: #666; font-size: 0.85rem; margin-top: 0.5rem;">Messages & connections</p>
+            </div>
+            <div class="connector" id="connector-google" onclick="showInstruction('google')">
+                <h4>👥 Google Contacts</h4>
+                <p class="status planned">◯ Manual</p>
+                <p style="color: #666; font-size: 0.85rem; margin-top: 0.5rem;">Contact sync</p>
+            </div>
+        </div>
+
+        <div id="instructions-container">
+            <!-- WhatsApp Instructions (Default) -->
+            <div id="instruction-whatsapp" class="instruction-block active">
+                <h3>Commands</h3>
+                <div class="commands">
+                    <pre><span class="comment"># Setup (once)</span>
+<code>npm run config</code>
+
+<span class="comment"># WhatsApp workflow</span>
+<code>npm run whatsapp:get</code>      <span class="comment"># Collect raw data</span>
+<code>npm run whatsapp:process</code>  <span class="comment"># Generate local output</span>
+<code>npm run whatsapp:push</code>     <span class="comment"># Sync to GitHub</span></pre>
+                </div>
+            </div>
+
+            <!-- LinkedIn Instructions -->
+            <div id="instruction-linkedin" class="instruction-block">
+                <h3>LinkedIn Data Export</h3>
+                <div class="commands" style="border-left: 4px solid #ffcc00;">
+                    <p style="margin-bottom: 1rem; color: #fff;">Currently, the safest way to get your data is via
+                        LinkedIn's official archive tool.</p>
+                    <ol class="step-list">
+                        <li>Go to <strong>Settings & Privacy</strong> from your profile icon.</li>
+                        <li>Select <strong>Data Privacy</strong> on the left sidebar.</li>
+                        <li>Click <strong>Get a copy of your data</strong>.</li>
+                        <li>Select <strong>Download larger data archive</strong> (includes everything).</li>
+                        <li>Click <strong>Request archive</strong>.</li>
+                    </ol>
+                    <p style="margin-top: 1rem; font-size: 0.85rem; color: #888;">
+                        <em>Note: It typically takes 24 hours to receive the email link.</em>
+                    </p>
+                    <div style="margin-top: 1.5rem;">
+                        <a href="https://www.linkedin.com/mypreferences/d/download-my-data" target="_blank">
+                            Go to LinkedIn Data Export <span class="external-link-icon">↗</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Google Contacts Instructions -->
+            <div id="instruction-google" class="instruction-block">
+                <h3>Google Contacts Export</h3>
+                <div class="commands" style="border-left: 4px solid #ffcc00;">
+                    <p style="margin-bottom: 1rem; color: #fff;">Export your contacts directly to CSV.</p>
+                    <ol class="step-list">
+                        <li>Go to <a href="https://contacts.google.com" target="_blank">contacts.google.com</a>.</li>
+                        <li>In the sidebar, click <strong>Export</strong> (or icon <span
+                                style="font-family: sans-serif;">📤</span>).</li>
+                        <li>Select <strong>Google CSV</strong> as the format.</li>
+                        <li>Click <strong>Export</strong> to download.</li>
+                    </ol>
+                    <div style="margin-top: 1.5rem;">
+                        <a href="https://contacts.google.com" target="_blank">
+                            Open Google Contacts <span class="external-link-icon">↗</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <h3>Principles</h3>
+        <div class="principles">
+            <div class="principle">
+                <strong>Open source</strong>
+                <span>You can audit the code.</span>
+            </div>
+            <div class="principle">
+                <strong>Local-first</strong>
+                <span>No cloud dependency. Everything runs locally and stays on your machine.</span>
+            </div>
+            <div class="principle">
+                <strong>Version-based backup</strong>
+                <span>Sync to your own GitHub repo</span>
+            </div>
+        </div>
+
+        <footer>
+            <p>Your data belongs to you. Reclaim it.</p>
+            <p style="margin-top: 1rem; font-size: 0.75rem; color: #666;">
+                <a href="https://github.com/dh7/own-your-data" target="_blank"
+                    style="color: #666; text-decoration: none;">
+                    ⭐ Star on GitHub
+                </a>
+            </p>
+        </footer>
+    </div>
+
+    <script>
+        const accounts = [
+            "X",
+            "WhatsApp",
+            "Google",
+            "Instagram",
+            "Facebook",
+            "Signal"
+        ];
+
+        const element = document.getElementById('account-cycle');
+        let index = 0;
+
+        setInterval(() => {
+            index = (index + 1) % accounts.length;
+            element.textContent = accounts[index];
+        }, 300);
+
+        function showInstruction(id) {
+            // Remove active class from all connectors
+            document.querySelectorAll('.connector').forEach(el => el.classList.remove('active'));
+            // Remove active class from all instruction blocks
+            document.querySelectorAll('.instruction-block').forEach(el => el.classList.remove('active'));
+
+            // Add active class to clicked connector
+            document.getElementById('connector-' + id).classList.add('active');
+            // Add active class to corresponding instruction block
+            document.getElementById('instruction-' + id).classList.add('active');
+        }
+    </script>
+</body>
+
+</html>

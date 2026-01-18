@@ -1,4 +1,6 @@
-# SecondBrain Connectors
+# Own Your Data
+
+[**🌐 Live Website**](https://dh7.github.io/own-your-data/) | [**⭐ Star on GitHub**](https://github.com/dh7/own-your-data)
 
 > ## ⚠️ EXPERIMENTAL - USE AT YOUR OWN RISK ⚠️
 > 
@@ -6,11 +8,12 @@
 > 
 > The fact that you fear losing your account is telling a lot about how much of your own life you don't control already.
 > 
-> Do you fear losing your data? **OWN THEM.**
+> Do you fear losing your data? **OWN IT.**
 
 ---
 
-Local-first data connectors. Collect your conversations and contacts from various platforms and store them locally + sync to GitHub.
+**Own Your Data** sets your digital life free.
+Local-first data connectors. Collect your conversations and contacts from various platforms and store them locally + optionally sync to your own GitHub repository.
 
 ## Connectors
 
@@ -41,9 +44,10 @@ src/
   config/           # Shared config webapp
   shared/           # Shared utilities
   whatsapp/         # WhatsApp connector
-  linkedin/         # LinkedIn connector (placeholder)
-  google-contact/   # Google Contact connector (placeholder)
+  linkedin/         # LinkedIn connector
+  google-contact/   # Google Contact connector
 
+docs/               # Website (GitHub Pages)
 auth/               # Session files (DO NOT DELETE)
 logs/               # Logs per connector
 raw-dumps/          # Raw API data per connector
