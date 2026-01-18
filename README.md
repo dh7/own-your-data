@@ -1,119 +1,71 @@
-# WhatsApp Collector
+# SecondBrain Connectors
 
-Local-first WhatsApp message collector. Reads your daily conversations and saves them to GitHub via MindCache.
+> ## ⚠️ EXPERIMENTAL - USE AT YOUR OWN RISK ⚠️
+> 
+> **This project uses unofficial APIs. Using it may result in your account being banned.**
+> 
+> The fact that you fear losing your account is telling a lot about how much of your own life you don't control already.
+> 
+> Do you fear losing your data? **OWN THEM.**
 
-> ⚠️ **READ-ONLY**: This tool only reads messages. It never sends anything to WhatsApp.
+---
+
+Local-first data connectors. Collect your conversations and contacts from various platforms and store them locally + sync to GitHub.
+
+## Connectors
+
+| Connector | Status | Description |
+|-----------|--------|-------------|
+| WhatsApp | ✅ Working | Messages via Baileys |
+| LinkedIn | 🚧 Planned | Messages & connections |
+| Google Contacts | 🚧 Planned | Contact sync |
 
 ## Quick Start
 
 ```bash
-# Install dependencies
 npm install
 
 # 1. Configure (once) - opens web UI
 npm run config
 
-# 2. Collect messages (run manually or via cron)
-npm run get
-```
-
-## Features
-
-- 📱 **WhatsApp Web** connection via Baileys (WebSocket, lightweight)
-- 🔄 **Incremental sync** - only fetches new messages
-- 📁 **Per-person-per-day** storage: `john-doe-2026-01-17`
-- 🐙 **GitHub backup** via MindCache GitStore
-- 📝 **Log files** for each collection run
-- 🐢 **Rate limiting** to avoid bans (random 2-5s delays)
-
-## Setup
-
-### 1. Configure WhatsApp & GitHub
-
-```bash
-npm run config
-```
-
-Opens `http://localhost:3456`:
-
-1. **Scan QR code** with WhatsApp on your phone
-2. **Enter GitHub details**:
-   - Personal Access Token (with `repo` scope)
-   - Repository owner/name
-   - Folder path (e.g., `whatsapp`)
-
-### 2. Collect Messages
-
-```bash
-npm run get
-```
-
-This will:
-1. Load existing data from GitHub
-2. Connect to WhatsApp
-3. Fetch today's new messages
-4. Save to GitHub with a commit
-
-### 3. Automate with Cron
-
-Run every hour:
-
-```bash
-0 * * * * cd /path/to/whatsapp_connector && npm run get >> /dev/null 2>&1
+# 2. WhatsApp workflow (independent steps)
+npm run whatsapp:get      # Collect raw data
+npm run whatsapp:process  # Generate local output
+npm run whatsapp:push     # Sync to GitHub
 ```
 
 ## Project Structure
 
 ```
-whatsapp_connector/
-├── src/
-│   ├── config.ts         # Configuration types and utilities
-│   ├── storage.ts        # MindCache + GitStore integration
-│   ├── collector.ts      # WhatsApp message fetching
-│   ├── config-server.ts  # Web UI for setup
-│   └── get.ts            # Main collection script
-├── auth/                 # Session files (gitignored)
-├── logs/                 # Collection logs
-└── package.json
+src/
+  config/           # Shared config webapp
+  shared/           # Shared utilities
+  whatsapp/         # WhatsApp connector
+  linkedin/         # LinkedIn connector (placeholder)
+  google-contact/   # Google Contact connector (placeholder)
+
+auth/               # Session files (DO NOT DELETE)
+logs/               # Logs per connector
+raw-dumps/          # Raw API data per connector
+conversations/      # Processed messages (flat)
+contacts/           # Synced contacts (flat)
 ```
 
-## Data Format
+## Philosophy
 
-Messages are stored in MindCache as markdown, one key per conversation per day:
+Your data belongs to you. These platforms hold your conversations, your contacts, your memories hostage. This project helps you take them back.
 
-**Key**: `john-doe-2026-01-17`  
-**Value**:
-```markdown
-# John Doe - 2026-01-17
-
-**10:30** John: Hey, how are you?
-**10:32** Me: I'm good, thanks!
-```
-
-## Technologies
-
-| Component | Library |
-|-----------|---------|
-| WhatsApp | [@whiskeysockets/baileys](https://github.com/WhiskeySockets/Baileys) |
-| Storage | [mindcache](https://mindcache.dev) |
-| GitHub Sync | [@mindcache/gitstore](https://www.npmjs.com/package/@mindcache/gitstore) |
-
-## Logs
-
-Each `npm run get` creates a log file in `logs/`:
-
-```
-logs/
-├── collect-2026-01-17T10-30-00-000Z.log
-├── collect-2026-01-17T14-00-00-000Z.log
-└── ...
-```
+- **Local-first**: Everything is stored on your machine first
+- **Raw dumps**: Keep the original API responses
+- **GitHub backup**: Optional sync to your own repository
+- **No cloud dependencies**: Works offline after initial setup
 
 ## Security Notes
 
-- Session files in `auth/` are gitignored
+- Session files in `auth/` are gitignored and contain encryption keys
 - GitHub token is stored locally in `auth/github-token.json`
-- No credentials are committed to the repository
+- Raw dumps contain your personal messages - keep them safe
+- No data is sent anywhere except your own GitHub repo (if configured)
 
 ## License
 
