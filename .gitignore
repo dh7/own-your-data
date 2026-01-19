@@ -17,6 +17,8 @@ raw-dumps/
 # Local conversation backups
 conversations/
 
+# Local Config
+config.json
 
 # Environment
 .env
