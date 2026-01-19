@@ -29,6 +29,11 @@ export interface GitHubConfig {
     path: string; // folder in repo, e.g., "data"
 }
 
+export interface TwitterConfig {
+    accounts: string[]; // Twitter usernames to scrape
+    tweetsPerAccount?: number; // Number of tweets to fetch per account (default: 100)
+}
+
 export interface ConnectorStatus {
     whatsapp: boolean;
     linkedin: boolean;
@@ -38,6 +43,7 @@ export interface ConnectorStatus {
 export interface AppConfig {
     paths: PathsConfig;
     github?: GitHubConfig;
+    twitter?: TwitterConfig;
     connectors?: ConnectorStatus;
 }
 
@@ -53,6 +59,7 @@ export async function loadConfig(): Promise<AppConfig> {
         return {
             paths: { ...DEFAULT_PATHS, ...config.paths },
             github: config.github,
+            twitter: config.twitter,
             connectors: config.connectors,
         };
     } catch {
@@ -87,12 +94,16 @@ export function getResolvedPaths(config: AppConfig): {
     // Google Contact specific
     googleContactLogs: string;
     googleContactRawDumps: string;
+    // Twitter specific
+    twitterLogs: string;
+    twitterRawDumps: string;
+    apifyToken: string;
 } {
     const root = process.cwd();
     const authDir = path.resolve(root, config.paths.auth);
     const logsDir = path.resolve(root, config.paths.logs);
     const rawDumpsDir = path.resolve(root, config.paths.rawDumps);
-    
+
     return {
         auth: authDir,
         logs: logsDir,
@@ -110,6 +121,10 @@ export function getResolvedPaths(config: AppConfig): {
         // Google Contact
         googleContactLogs: path.join(logsDir, 'google-contact'),
         googleContactRawDumps: path.join(rawDumpsDir, 'google-contact'),
+        // Twitter
+        twitterLogs: path.join(logsDir, 'twitter'),
+        twitterRawDumps: path.join(rawDumpsDir, 'twitter'),
+        apifyToken: path.join(authDir, 'apify-token.json'),
     };
 }
 
@@ -133,7 +148,7 @@ export async function loadGitHubConfig(): Promise<GitHubConfig | null> {
 export async function saveGitHubConfig(ghConfig: GitHubConfig): Promise<void> {
     const config = await loadConfig();
     const paths = getResolvedPaths(config);
-    
+
     await fs.mkdir(paths.auth, { recursive: true });
     await fs.writeFile(paths.githubToken, JSON.stringify(ghConfig, null, 2));
 }

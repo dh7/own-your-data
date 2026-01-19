@@ -5,5 +5,10 @@
     "conversations": "./conversations",
     "contacts": "./contacts",
     "rawDumps": "./raw-dumps"
+  },
+  "twitter": {
+    "accounts": [
+      "karpathy"
+    ]
   }
 }

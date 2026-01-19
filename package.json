@@ -8,6 +8,8 @@
     "whatsapp:get": "ts-node src/whatsapp/get.ts",
     "whatsapp:process": "ts-node src/whatsapp/process.ts",
     "whatsapp:push": "ts-node src/whatsapp/push.ts",
+    "twitter:get": "ts-node src/twitter/get.ts",
+    "twitter:push": "ts-node src/twitter/push.ts",
     "build": "tsc",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -23,6 +25,7 @@
   "type": "commonjs",
   "dependencies": {
     "@mindcache/gitstore": "^0.1.0",
+    "apify-client": "^2.21.0",
     "baileys": "^7.0.0-rc.9",
     "express": "^4.21.2",
     "mindcache": "^3.7.0",
