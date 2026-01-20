@@ -11,6 +11,7 @@ import { chromium } from 'playwright'; // Add playwright import
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { exec } from 'child_process';
+import multer from 'multer';
 import { saveGitHubConfig, loadGitHubConfig, loadConfig, saveConfig, getResolvedPaths } from './config';
 import { useSingleFileAuthState } from '../shared/auth-utils';
 
@@ -21,6 +22,7 @@ import { renderGitHubSection } from './templates/github';
 import { renderWhatsAppSection } from './templates/whatsapp';
 import { renderTwitterSection } from './templates/twitter';
 import { renderInstagramSection } from './templates/instagram';
+import { renderFileBrowserSection } from './templates/filebrowser';
 
 const app = express();
 const PORT = 3456;
@@ -68,6 +70,7 @@ app.get('/', async (req, res) => {
       playwrightInstalled,
       isLoggedIn: await checkInstagramAuth(getResolvedPaths(config))
     }, savedSection === 'instagram'),
+    renderFileBrowserSection(),
   ];
 
   res.send(renderLayout(sections));
@@ -201,6 +204,157 @@ app.post('/instagram/login', async (req, res) => {
     res.json({ success: true });
   } catch (e: any) {
     console.error('Instagram login failed:', e);
+    res.json({ success: false, error: e.message });
+  }
+});
+
+// ============ FILE BROWSER ROUTES ============
+
+// List files in directory
+app.get('/files/list', async (req, res) => {
+  try {
+    const basePath = process.cwd();
+    let requestedPath = (req.query.path as string) || '.';
+
+    // Normalize and resolve the path
+    const fullPath = path.resolve(basePath, requestedPath);
+
+    // Security: ensure path is within the project
+    if (!fullPath.startsWith(basePath)) {
+      res.json({ error: 'Access denied' });
+      return;
+    }
+
+    const stat = await fs.stat(fullPath);
+    if (!stat.isDirectory()) {
+      res.json({ error: 'Not a directory' });
+      return;
+    }
+
+    const entries = await fs.readdir(fullPath, { withFileTypes: true });
+    const files = await Promise.all(
+      entries
+        .filter(e => !e.name.startsWith('.')) // Hide hidden files
+        .map(async (entry) => {
+          const filePath = path.join(fullPath, entry.name);
+          try {
+            const fileStat = await fs.stat(filePath);
+            return {
+              name: entry.name,
+              isDirectory: entry.isDirectory(),
+              size: fileStat.size,
+              modified: fileStat.mtime.toISOString(),
+            };
+          } catch {
+            return {
+              name: entry.name,
+              isDirectory: entry.isDirectory(),
+              size: 0,
+              modified: '',
+            };
+          }
+        })
+    );
+
+    // Return relative path for display
+    const relativePath = path.relative(basePath, fullPath) || '.';
+    res.json({ path: relativePath, files });
+  } catch (e: any) {
+    res.json({ error: e.message });
+  }
+});
+
+// Download file
+app.get('/files/download', async (req, res) => {
+  try {
+    const basePath = process.cwd();
+    const requestedPath = (req.query.path as string) || '';
+    const fullPath = path.resolve(basePath, requestedPath);
+
+    // Security check
+    if (!fullPath.startsWith(basePath)) {
+      res.status(403).send('Access denied');
+      return;
+    }
+
+    const stat = await fs.stat(fullPath);
+    if (stat.isDirectory()) {
+      res.status(400).send('Cannot download directory');
+      return;
+    }
+
+    res.download(fullPath);
+  } catch (e: any) {
+    res.status(404).send('File not found');
+  }
+});
+
+// Delete file
+app.post('/files/delete', async (req, res) => {
+  try {
+    const basePath = process.cwd();
+    const requestedPath = req.body.path || '';
+    const fullPath = path.resolve(basePath, requestedPath);
+
+    // Security check
+    if (!fullPath.startsWith(basePath)) {
+      res.json({ success: false, error: 'Access denied' });
+      return;
+    }
+
+    // Prevent deleting critical files
+    const protectedPaths = ['package.json', 'tsconfig.json', 'node_modules', 'src', '.git'];
+    if (protectedPaths.some(p => fullPath.endsWith(p) || fullPath.includes('/node_modules/'))) {
+      res.json({ success: false, error: 'Cannot delete protected file' });
+      return;
+    }
+
+    const stat = await fs.stat(fullPath);
+    if (stat.isDirectory()) {
+      await fs.rm(fullPath, { recursive: true });
+    } else {
+      await fs.unlink(fullPath);
+    }
+
+    res.json({ success: true });
+  } catch (e: any) {
+    res.json({ success: false, error: e.message });
+  }
+});
+
+// Upload file with multer
+const upload = multer({
+  storage: multer.diskStorage({
+    destination: async (req, file, cb) => {
+      const uploadPath = req.body.path || '.';
+      const basePath = process.cwd();
+      const fullPath = path.resolve(basePath, uploadPath);
+
+      // Security check
+      if (!fullPath.startsWith(basePath)) {
+        cb(new Error('Access denied'), '');
+        return;
+      }
+
+      cb(null, fullPath);
+    },
+    filename: (req, file, cb) => {
+      cb(null, file.originalname);
+    }
+  }),
+  limits: { fileSize: 50 * 1024 * 1024 } // 50MB
+});
+
+app.post('/files/upload', upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      res.json({ success: false, error: 'No file uploaded' });
+      return;
+    }
+
+    console.log(`📁 File uploaded: ${req.file.filename}`);
+    res.json({ success: true, filename: req.file.filename });
+  } catch (e: any) {
     res.json({ success: false, error: e.message });
   }
 });

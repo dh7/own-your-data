@@ -29,10 +29,12 @@
   "type": "commonjs",
   "dependencies": {
     "@mindcache/gitstore": "^0.1.0",
+    "@types/multer": "^2.0.0",
     "apify-client": "^2.21.0",
     "baileys": "^7.0.0-rc.9",
     "express": "^4.21.2",
     "mindcache": "^3.7.0",
+    "multer": "^2.0.2",
     "playwright": "^1.57.0",
     "qrcode": "^1.5.4"
   },
