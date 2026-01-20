@@ -10,7 +10,7 @@ export interface InstagramData {
     isLoggedIn: boolean;
 }
 
-export function renderInstagramSection(data: InstagramData, collapsed: boolean = true): string {
+export function renderInstagramSection(data: InstagramData, justSaved: boolean = false): string {
     const accounts = data.config?.accounts || [];
     const githubPath = data.config?.githubPath || 'instagram';
     const postsPerAccount = data.config?.postsPerAccount || 50;
@@ -29,8 +29,10 @@ export function renderInstagramSection(data: InstagramData, collapsed: boolean =
         statusText = `⚠️ Login needed`;
     }
 
+    // justSaved = true means section was just saved, so keep it open
+    // justSaved = false means normal load, keep it collapsed
     return `
-<details ${!collapsed ? 'open' : ''}>
+<details ${justSaved ? 'open' : ''}>
     <summary>
         <span class="icon">📸</span>
         Instagram
