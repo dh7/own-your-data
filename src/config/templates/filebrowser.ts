@@ -428,7 +428,34 @@ export function renderFileBrowserSection(): string {
     async function uploadFiles(files) {
         uploadQueue.innerHTML = '';
         
+        // Check which files already exist
+        const filesToUpload = [];
         for (const file of files) {
+            const existsRes = await fetch('/files/exists?path=' + encodeURIComponent(currentPath) + '&filename=' + encodeURIComponent(file.name));
+            const existsData = await existsRes.json();
+            
+            if (existsData.exists) {
+                if (confirm('File "' + file.name + '" already exists. Overwrite?')) {
+                    filesToUpload.push(file);
+                } else {
+                    // Skip this file
+                    uploadQueue.innerHTML += \`
+                        <div class="upload-item">
+                            <span class="name">\${file.name}</span>
+                            <span class="status" style="color: #888;">⏭️ Skipped</span>
+                        </div>
+                    \`;
+                }
+            } else {
+                filesToUpload.push(file);
+            }
+        }
+        
+        if (filesToUpload.length === 0) {
+            return;
+        }
+        
+        for (const file of filesToUpload) {
             const itemId = 'upload-' + Math.random().toString(36).substr(2, 9);
             uploadQueue.innerHTML += \`
                 <div class="upload-item" id="\${itemId}">
@@ -439,12 +466,17 @@ export function renderFileBrowserSection(): string {
             \`;
         }
         
-        for (let i = 0; i < files.length; i++) {
-            const file = files[i];
-            const itemId = uploadQueue.children[i].id;
-            const item = document.getElementById(itemId);
+        for (let i = 0; i < filesToUpload.length; i++) {
+            const file = filesToUpload[i];
+            // Find the item by looking for non-skipped items
+            const items = uploadQueue.querySelectorAll('.upload-item:not(.skipped)');
+            const item = items[i];
+            if (!item) continue;
+            
             const statusEl = item.querySelector('.status');
             const progressBar = item.querySelector('.progress-bar');
+            
+            if (!statusEl) continue;
             
             statusEl.textContent = 'Uploading...';
             statusEl.className = 'status uploading';
@@ -464,7 +496,7 @@ export function renderFileBrowserSection(): string {
                 if (result.success) {
                     statusEl.textContent = '✅ Done';
                     statusEl.className = 'status success';
-                    progressBar.style.width = '100%';
+                    if (progressBar) progressBar.style.width = '100%';
                 } else {
                     statusEl.textContent = '❌ ' + (result.error || 'Failed');
                     statusEl.className = 'status error';

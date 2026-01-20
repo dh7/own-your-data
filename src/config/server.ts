@@ -346,6 +346,37 @@ const upload = multer({
   limits: { fileSize: 50 * 1024 * 1024 } // 50MB
 });
 
+// Check if file exists (for upload warnings)
+app.get('/files/exists', async (req, res) => {
+  try {
+    const basePath = process.cwd();
+    const dirPath = (req.query.path as string) || '.';
+    const filename = req.query.filename as string;
+
+    if (!filename) {
+      res.json({ exists: false });
+      return;
+    }
+
+    const fullPath = path.resolve(basePath, dirPath, filename);
+
+    // Security check
+    if (!fullPath.startsWith(basePath)) {
+      res.json({ exists: false, error: 'Access denied' });
+      return;
+    }
+
+    try {
+      await fs.access(fullPath);
+      res.json({ exists: true, path: fullPath });
+    } catch {
+      res.json({ exists: false });
+    }
+  } catch (e: any) {
+    res.json({ exists: false, error: e.message });
+  }
+});
+
 app.post('/files/upload', upload.single('file'), async (req, res) => {
   try {
     if (!req.file) {
