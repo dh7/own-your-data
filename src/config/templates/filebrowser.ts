@@ -34,11 +34,16 @@ export function renderFileBrowserSection(): string {
             </div>
             
             <div class="upload-section">
-                <h4>📤 Upload File</h4>
-                <form id="upload-form" enctype="multipart/form-data">
-                    <input type="file" id="file-input" name="file" />
-                    <button type="submit">Upload to current folder</button>
-                </form>
+                <h4>📤 Upload Files</h4>
+                <div id="dropzone" class="dropzone">
+                    <span class="dropzone-icon">📁</span>
+                    <p>Drag & drop files here</p>
+                    <p class="dropzone-or">or</p>
+                </div>
+                <div class="upload-btn-container">
+                    <input type="file" id="file-input" multiple />
+                </div>
+                <div id="upload-queue" class="upload-queue"></div>
                 <p id="upload-status" class="help"></p>
             </div>
         </div>
@@ -157,14 +162,103 @@ export function renderFileBrowserSection(): string {
         color: #aaa;
     }
     
-    #upload-form {
-        display: flex;
-        gap: 0.5rem;
-        align-items: center;
+    .dropzone {
+        border: 2px dashed #444;
+        border-radius: 8px;
+        padding: 2rem;
+        text-align: center;
+        transition: all 0.3s ease;
+        background: #0a0a0a;
+        cursor: pointer;
     }
     
-    #upload-form input[type="file"] {
+    .dropzone:hover,
+    .dropzone.dragover {
+        border-color: #0f0;
+        background: #0a1a0a;
+    }
+    
+    .dropzone-content {
+        pointer-events: none;
+    }
+    
+    .dropzone-icon {
+        font-size: 3rem;
+        display: block;
+        margin-bottom: 0.5rem;
+    }
+    
+    .dropzone p {
+        color: #888;
+        margin: 0.25rem 0;
+    }
+    
+    .dropzone-or {
+        font-size: 0.8rem;
+        color: #555 !important;
+    }
+    
+    .upload-btn-container {
+        margin-top: 0.75rem;
+        text-align: center;
+    }
+    
+    .upload-btn-container input[type="file"] {
+        background: #1a1a1a;
+        border: 1px solid #444;
+        color: #fff;
+        padding: 0.5rem 1rem;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+    
+    .upload-btn-container input[type="file"]:hover {
+        background: #2a2a2a;
+    }
+    
+    .upload-queue {
+        margin-top: 1rem;
+    }
+    
+    .upload-item {
+        display: flex;
+        align-items: center;
+        padding: 0.5rem;
+        background: #0a0a0a;
+        border: 1px solid #333;
+        border-radius: 4px;
+        margin-bottom: 0.5rem;
+    }
+    
+    .upload-item .name {
         flex: 1;
+        font-family: monospace;
+        font-size: 0.85rem;
+    }
+    
+    .upload-item .status {
+        font-size: 0.8rem;
+        margin-left: 0.5rem;
+    }
+    
+    .upload-item .status.pending { color: #888; }
+    .upload-item .status.uploading { color: #4af; }
+    .upload-item .status.success { color: #0f0; }
+    .upload-item .status.error { color: #f66; }
+    
+    .upload-item .progress {
+        width: 60px;
+        height: 4px;
+        background: #333;
+        border-radius: 2px;
+        margin-left: 0.5rem;
+        overflow: hidden;
+    }
+    
+    .upload-item .progress-bar {
+        height: 100%;
+        background: #0f0;
+        transition: width 0.2s;
     }
     
     .loading {
@@ -299,42 +393,91 @@ export function renderFileBrowserSection(): string {
         }
     };
     
-    // Handle upload
-    document.getElementById('upload-form').addEventListener('submit', async function(e) {
+    // Dropzone handling (drag & drop only, file input is separate)
+    const dropzone = document.getElementById('dropzone');
+    const fileInput = document.getElementById('file-input');
+    const uploadQueue = document.getElementById('upload-queue');
+    
+    dropzone.addEventListener('dragover', (e) => {
         e.preventDefault();
+        dropzone.classList.add('dragover');
+    });
+    
+    dropzone.addEventListener('dragleave', () => {
+        dropzone.classList.remove('dragover');
+    });
+    
+    dropzone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropzone.classList.remove('dragover');
         
-        const fileInput = document.getElementById('file-input');
-        const statusEl = document.getElementById('upload-status');
-        
-        if (!fileInput.files.length) {
-            statusEl.textContent = 'Please select a file';
-            return;
-        }
-        
-        const formData = new FormData();
-        formData.append('file', fileInput.files[0]);
-        formData.append('path', currentPath);
-        
-        statusEl.textContent = 'Uploading...';
-        
-        try {
-            const response = await fetch('/files/upload', {
-                method: 'POST',
-                body: formData
-            });
-            const result = await response.json();
-            
-            if (result.success) {
-                statusEl.textContent = '✅ Uploaded successfully!';
-                fileInput.value = '';
-                refreshFiles();
-            } else {
-                statusEl.textContent = '❌ Upload failed: ' + result.error;
-            }
-        } catch (err) {
-            statusEl.textContent = '❌ Upload failed';
+        const files = Array.from(e.dataTransfer.files);
+        if (files.length > 0) {
+            uploadFiles(files);
         }
     });
+    
+    fileInput.addEventListener('change', () => {
+        const files = Array.from(fileInput.files);
+        if (files.length > 0) {
+            uploadFiles(files);
+            fileInput.value = '';
+        }
+    });
+    
+    async function uploadFiles(files) {
+        uploadQueue.innerHTML = '';
+        
+        for (const file of files) {
+            const itemId = 'upload-' + Math.random().toString(36).substr(2, 9);
+            uploadQueue.innerHTML += \`
+                <div class="upload-item" id="\${itemId}">
+                    <span class="name">\${file.name}</span>
+                    <span class="status pending">Waiting...</span>
+                    <div class="progress"><div class="progress-bar" style="width: 0%"></div></div>
+                </div>
+            \`;
+        }
+        
+        for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            const itemId = uploadQueue.children[i].id;
+            const item = document.getElementById(itemId);
+            const statusEl = item.querySelector('.status');
+            const progressBar = item.querySelector('.progress-bar');
+            
+            statusEl.textContent = 'Uploading...';
+            statusEl.className = 'status uploading';
+            
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                // Send path as query param since multer receives file before body
+                const response = await fetch('/files/upload?path=' + encodeURIComponent(currentPath), {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    statusEl.textContent = '✅ Done';
+                    statusEl.className = 'status success';
+                    progressBar.style.width = '100%';
+                } else {
+                    statusEl.textContent = '❌ ' + (result.error || 'Failed');
+                    statusEl.className = 'status error';
+                }
+            } catch (err) {
+                statusEl.textContent = '❌ Error';
+                statusEl.className = 'status error';
+            }
+        }
+        
+        // Refresh file list after all uploads
+        setTimeout(() => refreshFiles(), 500);
+    }
     
     // Initial load
     loadFiles('.');

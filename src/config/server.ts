@@ -325,8 +325,9 @@ app.post('/files/delete', async (req, res) => {
 // Upload file with multer
 const upload = multer({
   storage: multer.diskStorage({
-    destination: async (req, file, cb) => {
-      const uploadPath = req.body.path || '.';
+    destination: (req, file, cb) => {
+      // Get path from query params (body isn't parsed yet when multer runs)
+      const uploadPath = (req.query.path as string) || '.';
       const basePath = process.cwd();
       const fullPath = path.resolve(basePath, uploadPath);
 
@@ -352,9 +353,10 @@ app.post('/files/upload', upload.single('file'), async (req, res) => {
       return;
     }
 
-    console.log(`📁 File uploaded: ${req.file.filename}`);
-    res.json({ success: true, filename: req.file.filename });
+    console.log(`📁 File uploaded: ${req.file.filename} → ${req.file.destination}/${req.file.filename}`);
+    res.json({ success: true, filename: req.file.filename, path: req.file.destination });
   } catch (e: any) {
+    console.error('Upload error:', e);
     res.json({ success: false, error: e.message });
   }
 });
