@@ -134,7 +134,6 @@ app.post('/twitter', async (req, res) => {
   await saveConfig(config);
   console.log('✅ Twitter config saved');
   res.redirect('/?saved=twitter');
-  res.redirect('/?saved=twitter');
 });
 
 // Save Instagram config

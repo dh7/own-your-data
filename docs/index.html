@@ -346,6 +346,16 @@
                 <span class="status working">✓ Automated</span>
                 <p class="desc">Messages via Baileys</p>
             </div>
+            <div class="connector" id="connector-twitter" onclick="showInstruction('twitter')">
+                <h4>🐦 Twitter / X</h4>
+                <span class="status working">✓ Automated</span>
+                <p class="desc">Tweets via Playwright</p>
+            </div>
+            <div class="connector" id="connector-instagram" onclick="showInstruction('instagram')">
+                <h4>📸 Instagram</h4>
+                <span class="status working">✓ Automated</span>
+                <p class="desc">Posts via Playwright</p>
+            </div>
             <div class="connector" id="connector-linkedin" onclick="showInstruction('linkedin')">
                 <h4>💼 LinkedIn</h4>
                 <span class="status planned">◯ Manual</span>
@@ -370,6 +380,34 @@
 <code>npm run whatsapp:get</code>      <span class="comment"># Collect raw data</span>
 <code>npm run whatsapp:process</code>  <span class="comment"># Generate local output</span>
 <code>npm run whatsapp:push</code>     <span class="comment"># Sync to GitHub</span></pre>
+                </div>
+            </div>
+
+            <!-- Twitter Instructions -->
+            <div id="instruction-twitter" class="instruction-block">
+                <h3>Commands</h3>
+                <div class="commands">
+                    <pre><span class="comment"># Setup (once)</span>
+<code>npm run config</code>
+
+<span class="comment"># Twitter workflow</span>
+<code>npm run twitter:get</code>   <span class="comment"># Scrape tweets from configured accounts</span>
+<code>npm run twitter:push</code>  <span class="comment"># Sync to GitHub</span>
+<code>npm run push</code>          <span class="comment"># Push all connectors</span></pre>
+                </div>
+            </div>
+
+            <!-- Instagram Instructions -->
+            <div id="instruction-instagram" class="instruction-block">
+                <h3>Commands</h3>
+                <div class="commands">
+                    <pre><span class="comment"># Setup (once)</span>
+<code>npm run config</code>        <span class="comment"># Login via browser</span>
+
+<span class="comment"># Instagram workflow</span>
+<code>npm run instagram:get</code>   <span class="comment"># Scrape posts + download images</span>
+<code>npm run instagram:push</code>  <span class="comment"># Sync to GitHub</span>
+<code>npm run push</code>            <span class="comment"># Push all connectors</span></pre>
                 </div>
             </div>
 
