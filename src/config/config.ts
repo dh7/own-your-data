@@ -43,12 +43,22 @@ export interface TwitterConfig {
 }
 
 /**
+ * Instagram connector configuration
+ */
+export interface InstagramConfig {
+    githubPath: string;       // Path in GitHub repo (instagram)
+    accounts: string[];       // Instagram usernames to scrape
+    postsPerAccount?: number; // Number of posts per account (default: 50)
+}
+
+/**
  * Main app configuration (stored in config.json)
  */
 export interface AppConfig {
     storage: StorageConfig;
     whatsapp?: WhatsAppConfig;
     twitter?: TwitterConfig;
+    instagram?: InstagramConfig;
 }
 
 // ============ DEFAULTS ============
@@ -70,6 +80,12 @@ const DEFAULT_TWITTER: TwitterConfig = {
     tweetsPerAccount: 100,
 };
 
+const DEFAULT_INSTAGRAM: InstagramConfig = {
+    githubPath: 'instagram',
+    accounts: [],
+    postsPerAccount: 50,
+};
+
 const CONFIG_FILE = path.join(process.cwd(), 'config.json');
 
 // ============ LOAD/SAVE ============
@@ -85,6 +101,7 @@ export async function loadConfig(): Promise<AppConfig> {
             storage: { ...DEFAULT_STORAGE, ...config.storage },
             whatsapp: config.whatsapp ? { ...DEFAULT_WHATSAPP, ...config.whatsapp } : undefined,
             twitter: config.twitter ? { ...DEFAULT_TWITTER, ...config.twitter } : undefined,
+            instagram: config.instagram ? { ...DEFAULT_INSTAGRAM, ...config.instagram } : undefined,
         };
     } catch {
         return { storage: DEFAULT_STORAGE };
@@ -131,6 +148,11 @@ export function getResolvedPaths(config: AppConfig) {
         twitterLocal: path.join(connectorDataDir, 'twitter'),
         twitterLogs: path.join(logsDir, 'twitter'),
         twitterRawDumps: path.join(rawDumpsDir, 'twitter'),
+
+        // Instagram
+        instagramLocal: path.join(connectorDataDir, 'instagram'),
+        instagramLogs: path.join(logsDir, 'instagram'),
+        instagramRawDumps: path.join(rawDumpsDir, 'instagram'),
     };
 }
 

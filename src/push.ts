@@ -73,6 +73,17 @@ async function main() {
         });
     }
 
+    // Instagram files
+    const instagramFiles = await getFilesRecursively(paths.instagramLocal);
+    for (const file of instagramFiles) {
+        const relativePath = path.relative(paths.instagramLocal, file);
+        filesToUpload.push({
+            localPath: file,
+            remotePath: `${config.instagram?.githubPath || 'instagram'}/${relativePath}`,
+            connector: 'instagram',
+        });
+    }
+
     if (filesToUpload.length === 0) {
         console.log('⚠️ No files to push. Run connector get scripts first.');
         process.exit(0);

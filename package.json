@@ -11,6 +11,8 @@
     "whatsapp:push": "ts-node src/whatsapp/push.ts",
     "twitter:get": "ts-node src/twitter/get.ts",
     "twitter:push": "ts-node src/twitter/push.ts",
+    "instagram:get": "ts-node src/instagram/get.ts",
+    "instagram:push": "ts-node src/instagram/push.ts",
     "build": "tsc",
     "test": "echo \"Error: no test specified\" && exit 1"
   },

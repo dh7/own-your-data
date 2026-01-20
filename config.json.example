@@ -14,5 +14,12 @@
       "karpathy"
     ],
     "tweetsPerAccount": 100
+  },
+  "instagram": {
+    "githubPath": "instagram",
+    "accounts": [
+      "instagram"
+    ],
+    "postsPerAccount": 50
   }
 }

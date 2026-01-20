@@ -7,6 +7,7 @@ import express from 'express';
 import * as QRCode from 'qrcode';
 import makeWASocket, { DisconnectReason } from 'baileys';
 import { Boom } from '@hapi/boom';
+import { chromium } from 'playwright'; // Add playwright import
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { exec } from 'child_process';
@@ -19,6 +20,7 @@ import { renderStorageSection } from './templates/storage';
 import { renderGitHubSection } from './templates/github';
 import { renderWhatsAppSection } from './templates/whatsapp';
 import { renderTwitterSection } from './templates/twitter';
+import { renderInstagramSection } from './templates/instagram';
 
 const app = express();
 const PORT = 3456;
@@ -61,6 +63,11 @@ app.get('/', async (req, res) => {
       config: config.twitter,
       playwrightInstalled,
     }, savedSection === 'twitter'),
+    renderInstagramSection({
+      config: config.instagram,
+      playwrightInstalled,
+      isLoggedIn: await checkInstagramAuth(getResolvedPaths(config))
+    }, savedSection === 'instagram'),
   ];
 
   res.send(renderLayout(sections));
@@ -127,6 +134,76 @@ app.post('/twitter', async (req, res) => {
   await saveConfig(config);
   console.log('✅ Twitter config saved');
   res.redirect('/?saved=twitter');
+  res.redirect('/?saved=twitter');
+});
+
+// Save Instagram config
+app.post('/instagram', async (req, res) => {
+  const { accounts, postsPerAccount, githubPath } = req.body;
+  const config = await loadConfig();
+
+  const accountList = accounts ? accounts.split(',').filter((a: string) => a.trim()) : [];
+  config.instagram = {
+    githubPath: githubPath || 'instagram',
+    accounts: accountList,
+    postsPerAccount: parseInt(postsPerAccount) || 50,
+  };
+
+  await saveConfig(config);
+  console.log('✅ Instagram config saved');
+  res.redirect('/?saved=instagram');
+});
+
+// Instagram Login
+app.post('/instagram/login', async (req, res) => {
+  try {
+    const config = await loadConfig();
+    const paths = getResolvedPaths(config);
+
+    console.log('📸 Starting Instagram login flow...');
+
+    // Ensure auth dir
+    await fs.mkdir(paths.auth, { recursive: true });
+
+    const browser = await chromium.launch({
+      headless: false,
+    });
+    const context = await browser.newContext();
+    const page = await context.newPage();
+
+    // Auth state path
+    const statePath = path.join(paths.auth, 'instagram-state.json');
+
+    // Goto Instagram
+    await page.goto('https://www.instagram.com', { waitUntil: 'domcontentloaded' });
+
+    // Check if already logged in (unlikely if we're here, but maybe user had weird state)
+    let isLoggedIn = false;
+    try {
+      await page.waitForSelector('a[href^="/direct/inbox/"]', { timeout: 3000 });
+      isLoggedIn = true;
+    } catch { }
+
+    if (!isLoggedIn) {
+      // Wait for user to log in
+      // Poll for success element
+      console.log('⏳ Waiting for user to log in...');
+
+      // Wait up to 5 minutes
+      await page.waitForSelector('a[href^="/direct/inbox/"]', { timeout: 300000 });
+    }
+
+    // Save state
+    await context.storageState({ path: statePath });
+    console.log('✅ Instagram session saved!');
+
+    await browser.close();
+
+    res.json({ success: true });
+  } catch (e: any) {
+    console.error('Instagram login failed:', e);
+    res.json({ success: false, error: e.message });
+  }
 });
 
 app.get('/status', (req, res) => {
@@ -255,7 +332,19 @@ app.post('/shutdown', (req, res) => {
   setTimeout(() => process.exit(0), 500);
 });
 
+// ============ HELPERS ============
+
+async function checkInstagramAuth(paths: any): Promise<boolean> {
+  try {
+    await fs.access(path.join(paths.auth, 'instagram-state.json'));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // ============ WHATSAPP ============
+
 
 async function checkOrStartWhatsApp() {
   const config = await loadConfig();
