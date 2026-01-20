@@ -1,14 +1,18 @@
 {
-  "paths": {
+  "storage": {
     "auth": "./auth",
     "logs": "./logs",
-    "conversations": "./conversations",
-    "contacts": "./contacts",
-    "rawDumps": "./raw-dumps"
+    "rawDumps": "./raw-dumps",
+    "connectorData": "./connector_data"
+  },
+  "whatsapp": {
+    "githubPath": "whatsapp"
   },
   "twitter": {
+    "githubPath": "twitter",
     "accounts": [
       "karpathy"
-    ]
+    ],
+    "tweetsPerAccount": 100
   }
 }

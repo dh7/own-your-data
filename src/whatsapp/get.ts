@@ -61,7 +61,7 @@ async function main() {
     logger.log(`🚀 WhatsApp Collector - Long-running mode`);
     logger.log(`📅 Started: ${getTodayString()}`);
     logger.log(`📂 Raw dumps: ${paths.whatsappRawDumps}`);
-    logger.log(`📂 Conversations: ${paths.conversations}`);
+    logger.log(`📂 Conversations: ${paths.whatsappLocal}`);
     logger.log(`   Press Ctrl+C to stop.\n`);
 
     try {
@@ -69,7 +69,7 @@ async function main() {
         const stats = await collectRawMessages({
             sessionPath: paths.whatsappSession,
             rawDumpsDir: paths.whatsappRawDumps,
-            conversationsDir: paths.conversations,
+            conversationsDir: paths.whatsappLocal,
         });
 
         logger.log(`\n📊 Session Summary:`);

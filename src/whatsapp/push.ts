@@ -56,8 +56,8 @@ async function main() {
     const paths = getResolvedPaths(config);
     const today = getTodayString();
 
-    const localPath = path.join(paths.conversations, `whatsapp-${today}.md`);
-    const mediaDirPath = path.join(paths.conversations, 'media', today);
+    const localPath = path.join(paths.whatsappLocal, `whatsapp-${today}.md`);
+    const mediaDirPath = path.join(paths.whatsappLocal, 'media', today);
 
     console.log(`📤 WhatsApp Push - Syncing to GitHub`);
     console.log(`📅 Date: ${today}`);
@@ -79,7 +79,8 @@ async function main() {
         process.exit(1);
     }
 
-    console.log(`📦 Target: ${githubConfig.owner}/${githubConfig.repo}/${githubConfig.path}`);
+    const outputPath = config.whatsapp?.githubPath || 'whatsapp';
+    console.log(`📦 Target: ${githubConfig.owner}/${githubConfig.repo}/${outputPath}`);
 
     try {
         // Read local file and parse into MindCache
@@ -94,8 +95,10 @@ async function main() {
             tokenProvider: async () => githubConfig.token,
         });
 
+        // Use per-connector path or fallback
+        const whatsappPath = config.whatsapp?.githubPath || 'whatsapp';
         const sync = new MindCacheSync(gitStore, mindcache, {
-            filePath: `${githubConfig.path}/whatsapp-${today}.md`,
+            filePath: `${whatsappPath}/whatsapp-${today}.md`,
             instanceName: 'WhatsApp Collector',
         });
 
@@ -114,7 +117,7 @@ async function main() {
 
                 for (const filename of mediaFiles) {
                     const localFilePath = path.join(mediaDirPath, filename);
-                    const remoteFilePath = `${githubConfig.path}/media/${today}/${filename}`;
+                    const remoteFilePath = `${outputPath}/media/${today}/${filename}`;
                     const fileContent = await fs.readFile(localFilePath);
 
                     const success = await uploadFileToGitHub(

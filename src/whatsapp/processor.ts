@@ -143,7 +143,7 @@ export async function processRawDumps(config: AppConfig, daysToLookBack: number)
     }
 
     // Save each day's data
-    await fs.mkdir(paths.conversations, { recursive: true });
+    await fs.mkdir(paths.whatsappLocal, { recursive: true });
 
     for (const [dateStr, conversations] of Array.from(allDays)) {
         if (conversations.size === 0) continue;
@@ -177,7 +177,7 @@ export async function processRawDumps(config: AppConfig, daysToLookBack: number)
             });
         }
 
-        const localPath = path.join(paths.conversations, `whatsapp-${dateStr}.md`);
+        const localPath = path.join(paths.whatsappLocal, `whatsapp-${dateStr}.md`);
         await fs.writeFile(localPath, mindcache.toMarkdown(), 'utf-8');
     }
 

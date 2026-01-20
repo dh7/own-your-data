@@ -5,49 +5,74 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 
-// Default paths (relative to project root)
-const DEFAULT_PATHS = {
-    auth: './auth',
-    logs: './logs',
-    conversations: './conversations',
-    contacts: './contacts',
-    rawDumps: './raw-dumps',
-};
+// ============ INTERFACES ============
 
-export interface PathsConfig {
-    auth: string;
-    logs: string;
-    conversations: string;
-    contacts: string;
-    rawDumps: string;
+/**
+ * Global storage paths (shared across all connectors)
+ */
+export interface StorageConfig {
+    auth: string;          // Sessions & tokens (./auth)
+    logs: string;          // Collection logs (./logs)
+    rawDumps: string;      // Raw API data (./raw-dumps)
+    connectorData: string; // MindCache output (./connector_data)
 }
 
+/**
+ * GitHub storage configuration
+ */
 export interface GitHubConfig {
     token: string;
     owner: string;
     repo: string;
-    path: string; // folder in repo, e.g., "data"
 }
 
+/**
+ * WhatsApp connector configuration
+ */
+export interface WhatsAppConfig {
+    githubPath: string;  // Path in GitHub repo (whatsapp)
+}
+
+/**
+ * Twitter connector configuration
+ */
 export interface TwitterConfig {
-    accounts: string[]; // Twitter usernames to scrape
-    tweetsPerAccount?: number; // Number of tweets to fetch per account (default: 100)
+    githubPath: string;       // Path in GitHub repo (twitter)
+    accounts: string[];       // Twitter usernames to scrape
+    tweetsPerAccount?: number; // Number of tweets per account (default: 100)
 }
 
-export interface ConnectorStatus {
-    whatsapp: boolean;
-    linkedin: boolean;
-    googleContact: boolean;
-}
-
+/**
+ * Main app configuration (stored in config.json)
+ */
 export interface AppConfig {
-    paths: PathsConfig;
-    github?: GitHubConfig;
+    storage: StorageConfig;
+    whatsapp?: WhatsAppConfig;
     twitter?: TwitterConfig;
-    connectors?: ConnectorStatus;
 }
+
+// ============ DEFAULTS ============
+
+const DEFAULT_STORAGE: StorageConfig = {
+    auth: './auth',
+    logs: './logs',
+    rawDumps: './raw-dumps',
+    connectorData: './connector_data',
+};
+
+const DEFAULT_WHATSAPP: WhatsAppConfig = {
+    githubPath: 'whatsapp',
+};
+
+const DEFAULT_TWITTER: TwitterConfig = {
+    githubPath: 'twitter',
+    accounts: [],
+    tweetsPerAccount: 100,
+};
 
 const CONFIG_FILE = path.join(process.cwd(), 'config.json');
+
+// ============ LOAD/SAVE ============
 
 /**
  * Load app config from config.json (or return defaults)
@@ -57,13 +82,12 @@ export async function loadConfig(): Promise<AppConfig> {
         const data = await fs.readFile(CONFIG_FILE, 'utf-8');
         const config = JSON.parse(data) as Partial<AppConfig>;
         return {
-            paths: { ...DEFAULT_PATHS, ...config.paths },
-            github: config.github,
-            twitter: config.twitter,
-            connectors: config.connectors,
+            storage: { ...DEFAULT_STORAGE, ...config.storage },
+            whatsapp: config.whatsapp ? { ...DEFAULT_WHATSAPP, ...config.whatsapp } : undefined,
+            twitter: config.twitter ? { ...DEFAULT_TWITTER, ...config.twitter } : undefined,
         };
     } catch {
-        return { paths: DEFAULT_PATHS };
+        return { storage: DEFAULT_STORAGE };
     }
 }
 
@@ -74,59 +98,43 @@ export async function saveConfig(config: AppConfig): Promise<void> {
     await fs.writeFile(CONFIG_FILE, JSON.stringify(config, null, 2));
 }
 
+// ============ RESOLVED PATHS ============
+
 /**
- * Get resolved paths (absolute from project root)
+ * Get resolved absolute paths from config
  */
-export function getResolvedPaths(config: AppConfig): {
-    auth: string;
-    logs: string;
-    conversations: string;
-    contacts: string;
-    rawDumps: string;
-    githubToken: string;
-    // WhatsApp specific
-    whatsappSession: string;
-    whatsappLogs: string;
-    whatsappRawDumps: string;
-    // LinkedIn specific
-    linkedinLogs: string;
-    linkedinRawDumps: string;
-    // Google Contact specific
-    googleContactLogs: string;
-    googleContactRawDumps: string;
-    // Twitter specific
-    twitterLogs: string;
-    twitterRawDumps: string;
-    apifyToken: string;
-} {
+export function getResolvedPaths(config: AppConfig) {
     const root = process.cwd();
-    const authDir = path.resolve(root, config.paths.auth);
-    const logsDir = path.resolve(root, config.paths.logs);
-    const rawDumpsDir = path.resolve(root, config.paths.rawDumps);
+    const authDir = path.resolve(root, config.storage.auth);
+    const logsDir = path.resolve(root, config.storage.logs);
+    const rawDumpsDir = path.resolve(root, config.storage.rawDumps);
+    const connectorDataDir = path.resolve(root, config.storage.connectorData || DEFAULT_STORAGE.connectorData);
 
     return {
+        // Global
         auth: authDir,
         logs: logsDir,
-        conversations: path.resolve(root, config.paths.conversations),
-        contacts: path.resolve(root, config.paths.contacts),
         rawDumps: rawDumpsDir,
+        connectorData: connectorDataDir,
+
+        // Auth files
         githubToken: path.join(authDir, 'github-token.json'),
-        // WhatsApp
+        apifyToken: path.join(authDir, 'twitter-token.json'),
         whatsappSession: path.join(authDir, 'whatsapp-session.json'),
+
+        // WhatsApp
+        whatsappLocal: path.join(connectorDataDir, 'whatsapp'),
         whatsappLogs: path.join(logsDir, 'whatsapp'),
         whatsappRawDumps: path.join(rawDumpsDir, 'whatsapp'),
-        // LinkedIn
-        linkedinLogs: path.join(logsDir, 'linkedin'),
-        linkedinRawDumps: path.join(rawDumpsDir, 'linkedin'),
-        // Google Contact
-        googleContactLogs: path.join(logsDir, 'google-contact'),
-        googleContactRawDumps: path.join(rawDumpsDir, 'google-contact'),
+
         // Twitter
+        twitterLocal: path.join(connectorDataDir, 'twitter'),
         twitterLogs: path.join(logsDir, 'twitter'),
         twitterRawDumps: path.join(rawDumpsDir, 'twitter'),
-        apifyToken: path.join(authDir, 'apify-token.json'),
     };
 }
+
+// ============ GITHUB CONFIG ============
 
 /**
  * Load GitHub config from auth file
@@ -152,6 +160,8 @@ export async function saveGitHubConfig(ghConfig: GitHubConfig): Promise<void> {
     await fs.mkdir(paths.auth, { recursive: true });
     await fs.writeFile(paths.githubToken, JSON.stringify(ghConfig, null, 2));
 }
+
+// ============ UTILITIES ============
 
 /**
  * Get today's date string (YYYY-MM-DD)

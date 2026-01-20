@@ -14,8 +14,15 @@ logs/
 # Raw API dumps (sensitive message data!)
 raw-dumps/
 
-# Local conversation backups
+# Connector data (MindCache output)
+connector_data/
+
+# Legacy folders (if still exist)
 conversations/
+tweets/
+
+# Python venv
+.venv/
 
 # Local Config
 config.json

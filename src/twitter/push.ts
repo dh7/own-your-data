@@ -106,7 +106,8 @@ async function main() {
         process.exit(1);
     }
 
-    console.log(`📦 Target: ${githubConfig.owner}/${githubConfig.repo}/${githubConfig.path}`);
+    const twitterPath = config.twitter?.githubPath || 'twitter';
+    console.log(`📦 Target: ${githubConfig.owner}/${githubConfig.repo}/${twitterPath}`);
     console.log(`👥 Accounts: ${config.twitter.accounts.join(', ')}\n`);
 
     const gitStore = new GitStore({
@@ -146,7 +147,10 @@ async function main() {
                 }
             }
 
-            const filePath = `${githubConfig.path}/twitter-${username}.md`;
+            // Add last_scrape timestamp
+            mindcache.set('last_scrape', new Date().toISOString());
+
+            const filePath = `${twitterPath}/twitter-${username}.md`;
             const sync = new MindCacheSync(gitStore, mindcache, {
                 filePath,
                 instanceName: 'Twitter Scraper',

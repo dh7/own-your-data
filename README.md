@@ -20,6 +20,7 @@ Local-first data connectors. Collect your conversations and contacts from variou
 | Connector | Status | Description |
 |-----------|--------|-------------|
 | WhatsApp | ✅ Working | Messages via Baileys |
+| Twitter/X | ✅ Working | Tweets via Playwright |
 | LinkedIn | 🚧 Planned | Messages & connections |
 | Google Contacts | 🚧 Planned | Contact sync |
 
@@ -31,10 +32,15 @@ npm install
 # 1. Configure (once) - opens web UI
 npm run config
 
-# 2. WhatsApp workflow (independent steps)
+# 2. WhatsApp workflow
 npm run whatsapp:get      # Collect raw data
-npm run whatsapp:process  # Generate local output
-npm run whatsapp:push     # Sync to GitHub
+npm run whatsapp:process  # Generate MindCache
+
+# 3. Twitter workflow
+npm run twitter:get       # Scrape tweets + generate MindCache
+
+# 4. Sync Everything
+npm run push              # Sync all connector data to GitHub
 ```
 
 ## Project Structure
@@ -44,6 +50,7 @@ src/
   config/           # Shared config webapp
   shared/           # Shared utilities
   whatsapp/         # WhatsApp connector
+  twitter/          # Twitter connector
   linkedin/         # LinkedIn connector
   google-contact/   # Google Contact connector
 
@@ -51,7 +58,7 @@ docs/               # Website (GitHub Pages)
 auth/               # Session files (DO NOT DELETE)
 logs/               # Logs per connector
 raw-dumps/          # Raw API data per connector
-conversations/      # Processed messages (flat)
+connector_data/     # Processed MindCache output (whatsapp, twitter)
 contacts/           # Synced contacts (flat)
 ```
 

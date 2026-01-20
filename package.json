@@ -5,6 +5,7 @@
   "main": "dist/index.js",
   "scripts": {
     "config": "ts-node src/config/server.ts",
+    "push": "ts-node src/push.ts",
     "whatsapp:get": "ts-node src/whatsapp/get.ts",
     "whatsapp:process": "ts-node src/whatsapp/process.ts",
     "whatsapp:push": "ts-node src/whatsapp/push.ts",
@@ -29,6 +30,7 @@
     "baileys": "^7.0.0-rc.9",
     "express": "^4.21.2",
     "mindcache": "^3.7.0",
+    "playwright": "^1.57.0",
     "qrcode": "^1.5.4"
   },
   "devDependencies": {
