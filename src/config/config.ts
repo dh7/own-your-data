@@ -125,6 +125,7 @@ export async function loadConfig(): Promise<AppConfig> {
             whatsapp: config.whatsapp ? { ...DEFAULT_WHATSAPP, ...config.whatsapp } : undefined,
             twitter: config.twitter ? { ...DEFAULT_TWITTER, ...config.twitter } : undefined,
             instagram: config.instagram ? { ...DEFAULT_INSTAGRAM, ...config.instagram } : undefined,
+            scheduler: config.scheduler,
         };
     } catch {
         return { storage: DEFAULT_STORAGE };

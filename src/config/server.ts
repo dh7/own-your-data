@@ -398,6 +398,8 @@ app.post('/files/upload', upload.single('file'), async (req, res) => {
 
 // Save scheduler config (human-like timing)
 app.post('/scheduler', async (req, res) => {
+  console.log('📅 Scheduler form received:', req.body);
+
   const config = await loadConfig();
 
   config.scheduler = {
@@ -421,6 +423,7 @@ app.post('/scheduler', async (req, res) => {
     },
   };
 
+  console.log('📅 Saving scheduler config:', JSON.stringify(config.scheduler, null, 2));
   await saveConfig(config);
   console.log('✅ Scheduler config saved');
   res.redirect('/?saved=scheduler');
