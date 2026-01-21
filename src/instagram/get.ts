@@ -409,8 +409,19 @@ async function main() {
     // Verify login
     await ensureLoggedIn(page, context, statePath, logger);
 
-    const accounts = config.instagram.accounts;
+    // Shuffle accounts for more human-like behavior
+    const shuffleArray = <T>(arr: T[]): T[] => {
+        const shuffled = [...arr];
+        for (let i = shuffled.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+        }
+        return shuffled;
+    };
+    const accounts = shuffleArray(config.instagram.accounts);
     const postsPerAccount = config.instagram.postsPerAccount || 50;
+
+    logger.log(`👥 Accounts (randomized): ${accounts.join(', ')}`);
 
     for (const username of accounts) {
         // Create images directory for this user

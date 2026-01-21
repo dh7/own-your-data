@@ -282,9 +282,20 @@ async function main() {
         process.exit(1);
     }
 
+    // Shuffle accounts for more human-like behavior
+    const shuffleArray = <T>(arr: T[]): T[] => {
+        const shuffled = [...arr];
+        for (let i = shuffled.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+        }
+        return shuffled;
+    };
+    const accounts = shuffleArray(config.twitter.accounts);
+
     const tweetsPerAccount = config.twitter.tweetsPerAccount || 100;
     logger.log(`📂 Raw dumps: ${paths.twitterRawDumps}`);
-    logger.log(`👥 Accounts: ${config.twitter.accounts.join(', ')}`);
+    logger.log(`👥 Accounts (randomized): ${accounts.join(', ')}`);
     logger.log(`📊 Tweets per account: ${tweetsPerAccount}\n`);
 
     // Ensure output directory exists
@@ -306,7 +317,7 @@ async function main() {
     const allTweetsByUser = new Map<string, Tweet[]>();
 
     try {
-        for (const username of config.twitter.accounts) {
+        for (const username of accounts) {
             const rawPath = path.join(paths.twitterRawDumps, `${username}.json`);
 
             // Scrape tweets
@@ -333,7 +344,7 @@ async function main() {
             }
 
             // Small delay between accounts (random 5-10s)
-            if (config.twitter.accounts.indexOf(username) < config.twitter.accounts.length - 1) {
+            if (accounts.indexOf(username) < accounts.length - 1) {
                 const accountDelay = Math.floor(Math.random() * 5000) + 5000;
                 logger.log(`   ⏳ Waiting ${Math.round(accountDelay / 1000)}s before next account...`);
                 await page.waitForTimeout(accountDelay);
@@ -357,7 +368,7 @@ async function main() {
     logger.log(`\n📊 Summary:`);
     logger.log(`   New tweets: ${totalNew}`);
     logger.log(`   Total tweets: ${totalTotal}`);
-    logger.log(`   Accounts processed: ${config.twitter.accounts.length}`);
+    logger.log(`   Accounts processed: ${accounts.length}`);
     logger.log('✨ Done! Run "npm run twitter:push" to sync to GitHub.');
 
     const logFile = await logger.save();
