@@ -5,6 +5,7 @@
   "main": "dist/index.js",
   "scripts": {
     "config": "ts-node src/config/server.ts",
+    "get_all": "ts-node src/get_all.ts",
     "push": "ts-node src/push.ts",
     "whatsapp:get": "ts-node src/whatsapp/get.ts",
     "whatsapp:process": "ts-node src/whatsapp/process.ts",

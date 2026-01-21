@@ -52,6 +52,28 @@ export interface InstagramConfig {
 }
 
 /**
+ * Scheduler configuration for human-like behavior
+ */
+export interface SchedulerConnectorConfig {
+    enabled: boolean;
+    intervalHours: number;      // Base interval between runs
+    randomMinutes: number;      // Random variance ±minutes
+}
+
+export interface SchedulerConfig {
+    activeHours: {
+        start: number;          // Hour to start (0-23), e.g., 7
+        end: number;            // Hour to end (0-23), e.g., 23
+    };
+    twitter?: SchedulerConnectorConfig;
+    instagram?: SchedulerConnectorConfig;
+    push?: {
+        enabled: boolean;
+        intervalHours: number;  // How often to push (includes WhatsApp)
+    };
+}
+
+/**
  * Main app configuration (stored in config.json)
  */
 export interface AppConfig {
@@ -59,6 +81,7 @@ export interface AppConfig {
     whatsapp?: WhatsAppConfig;
     twitter?: TwitterConfig;
     instagram?: InstagramConfig;
+    scheduler?: SchedulerConfig;
 }
 
 // ============ DEFAULTS ============

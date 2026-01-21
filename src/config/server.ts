@@ -23,6 +23,7 @@ import { renderWhatsAppSection } from './templates/whatsapp';
 import { renderTwitterSection } from './templates/twitter';
 import { renderInstagramSection } from './templates/instagram';
 import { renderFileBrowserSection } from './templates/filebrowser';
+import { renderSchedulerSection } from './templates/scheduler';
 
 const app = express();
 const PORT = 3456;
@@ -54,6 +55,7 @@ app.get('/', async (req, res) => {
 
   const sections = [
     renderStorageSection(config.storage, savedSection === 'storage'),
+    renderFileBrowserSection(),
     renderGitHubSection(githubConfig, savedSection === 'github'),
     renderWhatsAppSection({
       connected: whatsappConnected,
@@ -70,7 +72,7 @@ app.get('/', async (req, res) => {
       playwrightInstalled,
       isLoggedIn: await checkInstagramAuth(getResolvedPaths(config))
     }, savedSection === 'instagram'),
-    renderFileBrowserSection(),
+    renderSchedulerSection(config.scheduler),
   ];
 
   res.send(renderLayout(sections));
@@ -392,6 +394,60 @@ app.post('/files/upload', upload.single('file'), async (req, res) => {
   }
 });
 
+// ============ SCHEDULER ROUTES ============
+
+// Save scheduler config (human-like timing)
+app.post('/scheduler', async (req, res) => {
+  const config = await loadConfig();
+
+  config.scheduler = {
+    activeHours: {
+      start: parseInt(req.body.activeStart) || 7,
+      end: parseInt(req.body.activeEnd) || 23,
+    },
+    twitter: {
+      enabled: req.body.twitterEnabled === 'on',
+      intervalHours: parseInt(req.body.twitterInterval) || 6,
+      randomMinutes: parseInt(req.body.twitterRandom) || 30,
+    },
+    instagram: {
+      enabled: req.body.instagramEnabled === 'on',
+      intervalHours: parseInt(req.body.instagramInterval) || 6,
+      randomMinutes: parseInt(req.body.instagramRandom) || 30,
+    },
+    push: {
+      enabled: req.body.pushEnabled === 'on',
+      intervalHours: parseInt(req.body.pushInterval) || 1,
+    },
+  };
+
+  await saveConfig(config);
+  console.log('✅ Scheduler config saved');
+  res.redirect('/?saved=scheduler');
+});
+
+// Check if daemon is running
+app.get('/scheduler/status', async (req, res) => {
+  const pidFile = './logs/get_all.pid';
+
+  try {
+    const pidStr = await fs.readFile(pidFile, 'utf-8');
+    const pid = parseInt(pidStr.trim());
+
+    // Check if process is running
+    try {
+      process.kill(pid, 0); // Signal 0 = just check if exists
+      res.json({ running: true, pid });
+    } catch {
+      // PID file exists but process is not running (stale)
+      await fs.unlink(pidFile).catch(() => { });
+      res.json({ running: false });
+    }
+  } catch {
+    res.json({ running: false });
+  }
+});
+
 app.get('/status', (req, res) => {
   res.json({ qr: currentQR, connected: whatsappConnected, status: connectionStatus });
 });
@@ -408,7 +464,7 @@ app.post('/test-github', async (req, res) => {
   const { token, owner, repo } = githubConfig;
   const filePath = 'connector_test.md';
   const now = new Date();
-  const content = `# Connector Test\n\nConnection test successful!\n\n- **Date**: ${now.toISOString()}\n- **Repository**: ${owner}/${repo}\n`;
+  const content = `# Connector Test\n\nConnection test successful!\n\n - ** Date **: ${now.toISOString()}\n - ** Repository **: ${owner} / ${repo}\n`;
 
   try {
     let sha: string | undefined;

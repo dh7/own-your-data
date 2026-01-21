@@ -11,7 +11,7 @@ export function renderStorageSection(config: StorageConfig, collapsed: boolean =
 <details>
     <summary>
         <span class="icon">📁</span>
-        Local Storage
+        Server Paths
         <span class="status connected">✅ Configured</span>
     </summary>
     <div class="section-content">

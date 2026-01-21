@@ -14,7 +14,7 @@ export function renderFileBrowserSection(): string {
 <details>
     <summary>
         <span class="icon">📂</span>
-        File Browser
+        Server Files
         <span class="status">Browse & Upload</span>
     </summary>
     <div class="section-content">
