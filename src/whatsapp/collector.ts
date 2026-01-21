@@ -147,7 +147,7 @@ async function processMessages(
 
 /**
  * Collect raw messages from WhatsApp and save to disk
- * Runs until Ctrl+C or disconnect
+ * Runs until Ctrl+C or logout (auto-reconnects on temporary disconnects)
  */
 export async function collectRawMessages(
     options: CollectorOptions
@@ -169,14 +169,6 @@ export async function collectRawMessages(
     const { version } = await fetchLatestBaileysVersion();
     console.log(`📦 Using Baileys version: ${version.join('.')}`);
 
-    const sock = makeWASocket({
-        auth: state,
-        version,
-        syncFullHistory: false,
-    });
-
-    sock.ev.on('creds.update', saveCreds);
-
     const stats: CollectorStats = {
         messageCount: 0,
         dumpFiles: 0,
@@ -184,69 +176,104 @@ export async function collectRawMessages(
         skippedDupes: 0,
     };
 
-    return new Promise((resolve, reject) => {
-        let isShuttingDown = false;
+    let isShuttingDown = false;
+    let reconnectAttempts = 0;
+    const MAX_RECONNECT_ATTEMPTS = 10;
 
-        // Graceful shutdown handler
-        const shutdown = async () => {
-            if (isShuttingDown) return;
-            isShuttingDown = true;
-            console.log('\n🔌 Disconnecting...');
-            sock.end(undefined);
-        };
-
-        process.on('SIGINT', shutdown);
-        process.on('SIGTERM', shutdown);
-
-        // Handle history sync
-        sock.ev.on('messaging-history.set' as any, async (data: any) => {
-            console.log(`📥 History: ${data.chats?.length || 0} chats, ${data.messages?.length || 0} messages`);
-            const result = await saveRawDump(rawDumpsDir, 'history-set', data);
-            stats.messageCount += result.messageCount;
-            stats.dumpFiles++;
-
-            if (data.messages?.length > 0) {
-                await processMessages(data.messages, conversationsDir, stats);
-            }
+    const createSocket = async (): Promise<CollectorStats> => {
+        const sock = makeWASocket({
+            auth: state,
+            version,
+            syncFullHistory: false,
         });
 
-        // Handle message upserts (main source of messages)
-        sock.ev.on('messages.upsert', async ({ messages, type }) => {
-            console.log(`📨 Upsert: ${messages.length} messages (type: ${type})`);
-            const result = await saveRawDump(rawDumpsDir, `upsert-${type}`, { messages, type });
-            stats.messageCount += result.messageCount;
-            stats.dumpFiles++;
+        sock.ev.on('creds.update', saveCreds);
 
-            await processMessages(messages, conversationsDir, stats);
-        });
+        return new Promise((resolve, reject) => {
+            // Graceful shutdown handler
+            const shutdown = async () => {
+                if (isShuttingDown) return;
+                isShuttingDown = true;
+                console.log('\n🔌 Disconnecting...');
+                sock.end(undefined);
+                resolve(stats);
+            };
 
-        sock.ev.on('connection.update', async (update) => {
-            const { connection, lastDisconnect, qr } = update;
+            process.on('SIGINT', shutdown);
+            process.on('SIGTERM', shutdown);
 
-            if (qr) {
-                console.log('📱 QR Code required. Run "npm run config" to authenticate.');
-                reject(new Error('QR code required - run npm run config'));
-                return;
-            }
+            // Handle history sync
+            sock.ev.on('messaging-history.set' as any, async (data: any) => {
+                console.log(`📥 History: ${data.chats?.length || 0} chats, ${data.messages?.length || 0} messages`);
+                const result = await saveRawDump(rawDumpsDir, 'history-set', data);
+                stats.messageCount += result.messageCount;
+                stats.dumpFiles++;
 
-            if (connection === 'close') {
-                const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode;
+                if (data.messages?.length > 0) {
+                    await processMessages(data.messages, conversationsDir, stats);
+                }
+            });
 
-                if (statusCode === DisconnectReason.loggedOut) {
-                    console.error('❌ Session logged out. Run "npm run config" to re-authenticate.');
-                    reject(new Error('Session logged out'));
+            // Handle message upserts (main source of messages)
+            sock.ev.on('messages.upsert', async ({ messages, type }) => {
+                console.log(`📨 Upsert: ${messages.length} messages (type: ${type})`);
+                const result = await saveRawDump(rawDumpsDir, `upsert-${type}`, { messages, type });
+                stats.messageCount += result.messageCount;
+                stats.dumpFiles++;
+
+                await processMessages(messages, conversationsDir, stats);
+            });
+
+            sock.ev.on('connection.update', async (update) => {
+                const { connection, lastDisconnect, qr } = update;
+
+                if (qr) {
+                    console.log('📱 QR Code required. Run "npm run config" to authenticate.');
+                    reject(new Error('QR code required - run npm run config'));
                     return;
                 }
 
-                // Any disconnect = stop (no auto-reconnect per user request)
-                console.log('📴 Connection closed.');
-                resolve(stats);
-            }
+                if (connection === 'close') {
+                    const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode;
 
-            if (connection === 'open') {
-                console.log('✅ Connected to WhatsApp');
-                console.log('📥 Listening for messages... (Ctrl+C to stop)\n');
-            }
+                    if (statusCode === DisconnectReason.loggedOut) {
+                        console.error('❌ Session logged out. Run "npm run config" to re-authenticate.');
+                        reject(new Error('Session logged out'));
+                        return;
+                    }
+
+                    if (isShuttingDown) {
+                        resolve(stats);
+                        return;
+                    }
+
+                    // Auto-reconnect on temporary disconnects
+                    reconnectAttempts++;
+                    if (reconnectAttempts <= MAX_RECONNECT_ATTEMPTS) {
+                        const delay = Math.min(reconnectAttempts * 2000, 30000); // Exponential backoff, max 30s
+                        console.log(`📴 Connection closed. Reconnecting in ${delay / 1000}s... (attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`);
+                        setTimeout(async () => {
+                            try {
+                                const result = await createSocket();
+                                resolve(result);
+                            } catch (e) {
+                                reject(e);
+                            }
+                        }, delay);
+                    } else {
+                        console.error('❌ Max reconnect attempts reached. Stopping.');
+                        resolve(stats);
+                    }
+                }
+
+                if (connection === 'open') {
+                    reconnectAttempts = 0; // Reset on successful connection
+                    console.log('✅ Connected to WhatsApp');
+                    console.log('📥 Listening for messages... (Ctrl+C to stop)\n');
+                }
+            });
         });
-    });
+    };
+
+    return createSocket();
 }
