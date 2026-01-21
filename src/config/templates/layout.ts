@@ -24,27 +24,17 @@ export function renderLayout(sections: string[]): string {
             max-width: 800px;
             margin: 0 auto;
         }
-        .header {
+        h1 {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 2rem;
-            padding: 1rem 1.5rem;
-            background: #161b22;
-            border: 1px solid #30363d;
-            border-radius: 8px;
-        }
-        h1 {
             color: #58a6ff;
             font-size: 1.5rem;
             font-weight: 700;
-        }
-        h1::before {
-            content: '> ';
-            color: #7ee787;
+            margin-bottom: 1.5rem;
         }
         .close-btn {
-            background: #238636;
+            background: #da3633;
             color: white;
             border: none;
             padding: 0.5rem 1rem;
@@ -56,7 +46,7 @@ export function renderLayout(sections: string[]): string {
             transition: background 0.2s;
         }
         .close-btn:hover {
-            background: #2ea043;
+            background: #f85149;
         }
         
         /* Accordion styles using details/summary */
@@ -285,10 +275,7 @@ export function renderLayout(sections: string[]): string {
 </head>
 <body>
     <div class="container">
-        <div class="header">
-            <h1>Own your data</h1>
-            <button onclick="closeConfig()" class="close-btn">✓ Close</button>
-        </div>
+        <h1>Own your data <button onclick="closeConfig()" class="close-btn">✕ Close</button></h1>
         ${sections.join('\n')}
     </div>
     

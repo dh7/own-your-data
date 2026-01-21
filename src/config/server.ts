@@ -77,7 +77,6 @@ app.get('/', async (req, res) => {
   const sections = [
     renderDependenciesSection({ playwrightInstalled, browsersInstalled }),
     renderStorageSection(config.storage, savedSection === 'storage'),
-    renderFileBrowserSection(),
     renderGitHubSection(githubConfig, savedSection === 'github'),
     renderWhatsAppSection({
       connected: whatsappConnected,
@@ -95,6 +94,7 @@ app.get('/', async (req, res) => {
       isLoggedIn: await checkInstagramAuth(getResolvedPaths(config))
     }, savedSection === 'instagram'),
     renderSchedulerSection(config.scheduler),
+    renderFileBrowserSection(),
   ];
 
   res.send(renderLayout(sections));
