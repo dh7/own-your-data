@@ -24,6 +24,7 @@ import { renderTwitterSection } from './templates/twitter';
 import { renderInstagramSection } from './templates/instagram';
 import { renderFileBrowserSection } from './templates/filebrowser';
 import { renderSchedulerSection } from './templates/scheduler';
+import { renderDependenciesSection } from './templates/dependencies';
 
 const app = express();
 const PORT = 3456;
@@ -45,15 +46,36 @@ app.get('/', async (req, res) => {
 
   // Check if Playwright is installed
   let playwrightInstalled = false;
+  let browsersInstalled = false;
   try {
     await fs.access(path.join(process.cwd(), 'node_modules', 'playwright'));
     playwrightInstalled = true;
+
+    // Check if browsers are installed by looking in the cache directory
+    const homeDir = process.env.HOME || process.env.USERPROFILE || '';
+    const possiblePaths = [
+      path.join(homeDir, '.cache', 'ms-playwright'),           // Linux
+      path.join(homeDir, 'Library', 'Caches', 'ms-playwright'), // macOS
+      path.join(homeDir, 'AppData', 'Local', 'ms-playwright'),  // Windows
+    ];
+
+    for (const cachePath of possiblePaths) {
+      try {
+        const entries = await fs.readdir(cachePath);
+        // Look for chromium folder (e.g., "chromium-1234")
+        if (entries.some(e => e.toLowerCase().startsWith('chromium'))) {
+          browsersInstalled = true;
+          break;
+        }
+      } catch { /* dir doesn't exist */ }
+    }
   } catch { /* playwright not installed */ }
 
   // Get persisted collapsed state from query
   const savedSection = req.query.saved as string | undefined;
 
   const sections = [
+    renderDependenciesSection({ playwrightInstalled, browsersInstalled }),
     renderStorageSection(config.storage, savedSection === 'storage'),
     renderFileBrowserSection(),
     renderGitHubSection(githubConfig, savedSection === 'github'),
@@ -429,6 +451,37 @@ app.post('/scheduler', async (req, res) => {
   res.redirect('/?saved=scheduler');
 });
 
+// ============ DEPENDENCIES ROUTES ============
+
+// Install Playwright browsers
+app.post('/dependencies/install-playwright', async (req, res) => {
+  console.log('🔧 Installing Playwright browsers...');
+
+  try {
+    const { exec } = await import('child_process');
+    const { promisify } = await import('util');
+    const execAsync = promisify(exec);
+
+    const { stdout, stderr } = await execAsync('npx playwright install chromium', {
+      timeout: 300000, // 5 minute timeout
+      maxBuffer: 10 * 1024 * 1024, // 10MB buffer
+    });
+
+    console.log('✅ Playwright browsers installed');
+    res.json({
+      success: true,
+      message: 'Playwright browsers installed successfully!',
+      output: stdout + (stderr ? '\n' + stderr : '')
+    });
+  } catch (e: any) {
+    console.error('❌ Failed to install Playwright browsers:', e.message);
+    res.json({
+      success: false,
+      error: e.message,
+      output: e.stdout || e.stderr || e.message
+    });
+  }
+});
 // Check if daemon is running
 app.get('/scheduler/status', async (req, res) => {
   const pidFile = './logs/get_all.pid';
