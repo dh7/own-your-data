@@ -29,7 +29,7 @@ export function renderDependenciesSection(status: DependenciesStatus): string {
 
     // Not ready - show install section
     return `
-<details open>
+<details>
     <summary>
         <span class="icon">🔧</span>
         Dependencies

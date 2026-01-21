@@ -32,7 +32,7 @@ export function renderInstagramSection(data: InstagramData, justSaved: boolean =
     // justSaved = true means section was just saved, so keep it open
     // justSaved = false means normal load, keep it collapsed
     return `
-<details ${justSaved ? 'open' : ''}>
+<details>
     <summary>
         <span class="icon">📸</span>
         Instagram
