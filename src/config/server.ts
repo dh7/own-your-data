@@ -75,6 +75,17 @@ async function checkInstagramAuth(paths: ReturnType<typeof getResolvedPaths>): P
   }
 }
 
+async function checkDaemonRunning(): Promise<boolean> {
+  try {
+    const pidPath = path.join(process.cwd(), 'logs', 'get_all.pid');
+    await fs.access(pidPath);
+    // TODO: strictly we should check if process is alive, but existence is good enough for now
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // ============ ROUTES ============
 
 // Main page
@@ -86,13 +97,14 @@ app.get('/', async (req, res) => {
 
   const playwright = await checkPlaywright();
   const playwrightInstalled = playwright.installed && playwright.browsers;
+  const daemonRunning = await checkDaemonRunning();
 
-  // Build core sections: System, File Browser, GitHub
+  // Build core sections first: System, File Browser, GitHub
   const sections: string[] = [
     renderSystemSection(config.storage, {
       playwrightInstalled: playwright.installed,
       browsersInstalled: playwright.browsers,
-      daemonRunning: false,
+      daemonRunning,
     }, savedSection === 'system' || savedSection === 'storage'),
     renderFileBrowserSection(),
     renderGitHubSection(githubConfig, savedSection === 'github'),

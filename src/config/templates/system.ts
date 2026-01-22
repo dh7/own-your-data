@@ -16,15 +16,23 @@ export function renderSystemSection(
     justSaved: boolean = false
 ): string {
     const allDepsGood = status.playwrightInstalled && status.browsersInstalled;
-    const statusClass = allDepsGood ? 'connected' : 'warning';
-    const statusText = allDepsGood ? '✅ Ready' : '⚠️ Setup needed';
+
+    let statusHtml = '';
+
+    if (status.daemonRunning) {
+        statusHtml = '<span class="status" style="background: #da3633; color: white;">🔥 Running</span>';
+    } else if (allDepsGood) {
+        statusHtml = '<span class="status" style="background: #bd561d; color: white;">⏸ Ready</span>';
+    } else {
+        statusHtml = '<span class="status warning">⚠️ Dependency Missing</span>';
+    }
 
     return `
 <details>
     <summary>
         <span class="icon">⚙️</span>
         System
-        <span class="status ${statusClass}">${statusText}</span>
+        ${statusHtml}
     </summary>
     <div class="section-content">
         <!-- Dependencies -->
