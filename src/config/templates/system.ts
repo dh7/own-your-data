@@ -1,5 +1,5 @@
 /**
- * System section - Dependencies, Storage, and Daemon control
+ * System section - Dependencies, Daemon control, and Storage Paths
  */
 
 import { StorageConfig } from '../config';
@@ -20,7 +20,7 @@ export function renderSystemSection(
     const statusText = allDepsGood ? '✅ Ready' : '⚠️ Setup needed';
 
     return `
-<details${justSaved ? ' open' : ''}>
+<details>
     <summary>
         <span class="icon">⚙️</span>
         System
@@ -105,5 +105,13 @@ export function renderSystemSection(
         </form>
     </div>
 </details>
+`;
+}
+
+export function renderPluginsDivider(): string {
+    return `
+<h2 style="color: #58a6ff; font-size: 1.25rem; font-weight: 700; margin: 2rem 0 1rem 0;">
+    Installed Plugins
+</h2>
 `;
 }

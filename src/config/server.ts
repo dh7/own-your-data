@@ -20,7 +20,7 @@ import { discoverPlugins, loadPluginModule } from '../plugins';
 
 // Templates
 import { renderLayout } from './templates/layout';
-import { renderSystemSection } from './templates/system';
+import { renderSystemSection, renderPluginsDivider } from './templates/system';
 import { renderGitHubSection } from './templates/github';
 import { renderFileBrowserSection } from './templates/filebrowser';
 
@@ -87,15 +87,19 @@ app.get('/', async (req, res) => {
   const playwright = await checkPlaywright();
   const playwrightInstalled = playwright.installed && playwright.browsers;
 
-  // Build core sections first
+  // Build core sections: System, File Browser, GitHub
   const sections: string[] = [
-    renderGitHubSection(githubConfig, savedSection === 'github'),
     renderSystemSection(config.storage, {
       playwrightInstalled: playwright.installed,
       browsersInstalled: playwright.browsers,
-      daemonRunning: false, // TODO: Could check if daemon PID file exists
-    }, savedSection === 'storage'),
+      daemonRunning: false,
+    }, savedSection === 'system' || savedSection === 'storage'),
+    renderFileBrowserSection(),
+    renderGitHubSection(githubConfig, savedSection === 'github'),
   ];
+
+  // Add title-style divider before plugins
+  sections.push(renderPluginsDivider());
 
   // Discover and render plugin sections
   const plugins = await discoverPlugins();
@@ -128,8 +132,7 @@ app.get('/', async (req, res) => {
     }
   }
 
-  // Add file browser at the end
-  sections.push(renderFileBrowserSection());
+
 
   res.send(renderLayout(sections));
 });
