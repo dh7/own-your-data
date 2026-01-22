@@ -1,88 +1,70 @@
 /**
  * Unified Data Collector - Human-like scheduling daemon
  * Run: npm run get_all
- * 
- * Runs forever, collecting data from Twitter/Instagram with human-like timing:
+ *
+ * Runs forever, collecting data from all plugins with human-like timing:
  * - More active during day, sleeps at night
  * - Random delays between runs to mimic human behavior
- * 
- * NOTE: WhatsApp should be run separately with `npm run whatsapp:get` 
- * as it's a real-time listener that stays connected.
- * 
+ *
+ * NOTE: Plugins with "realtime" mode (like WhatsApp) should be run separately.
+ *
+ * After collecting, automatically runs process_all and push_all.
  * Press Ctrl+C to stop.
  */
 
 import { spawn, ChildProcess } from 'child_process';
-import { loadConfig, SchedulerConfig, SchedulerConnectorConfig } from './config/config';
+import { loadConfig, getPluginConfig } from './config/config';
+import { discoverPlugins, getIntervalPlugins, DiscoveredPlugin } from './plugins';
+import { BasePluginConfig } from './plugins/types';
 
 // ============ TYPES ============
 
-interface ConnectorState {
+interface PluginState {
+    id: string;
     name: string;
     lastRun: Date | null;
     nextRun: Date | null;
     running: boolean;
-    process: ChildProcess | null;
 }
 
 // ============ HUMAN-LIKE TIMING ============
 
-/**
- * Get random variance in milliseconds
- */
 function getRandomVariance(randomMinutes: number): number {
     const variance = randomMinutes * 60 * 1000;
-    return Math.floor(Math.random() * variance * 2) - variance; // ±variance
+    return Math.floor(Math.random() * variance * 2) - variance;
 }
 
-/**
- * Check if we're in active hours
- */
-function isActiveHours(config: SchedulerConfig): boolean {
-    const now = new Date();
-    const hour = now.getHours();
+function isActiveHours(start: number, end: number): boolean {
+    const hour = new Date().getHours();
 
-    if (config.activeHours.start < config.activeHours.end) {
-        // Normal range (e.g., 7-23)
-        return hour >= config.activeHours.start && hour < config.activeHours.end;
+    if (start < end) {
+        return hour >= start && hour < end;
     } else {
-        // Overnight range (e.g., 22-6)
-        return hour >= config.activeHours.start || hour < config.activeHours.end;
+        return hour >= start || hour < end;
     }
 }
 
-/**
- * Get milliseconds until active hours start
- */
-function msUntilActiveHours(config: SchedulerConfig): number {
+function msUntilActiveHours(start: number): number {
     const now = new Date();
     const currentHour = now.getHours();
-    const startHour = config.activeHours.start;
 
     let hoursUntil: number;
-    if (currentHour < startHour) {
-        hoursUntil = startHour - currentHour;
+    if (currentHour < start) {
+        hoursUntil = start - currentHour;
     } else {
-        hoursUntil = 24 - currentHour + startHour;
+        hoursUntil = 24 - currentHour + start;
     }
 
-    // Add small random delay (0-30 min) to not start exactly on the hour
     const randomDelay = Math.floor(Math.random() * 30 * 60 * 1000);
     return hoursUntil * 60 * 60 * 1000 + randomDelay;
 }
 
-/**
- * Calculate next run time with human-like randomness
- */
-function calculateNextRun(connectorConfig: SchedulerConnectorConfig): Date {
-    const baseMs = connectorConfig.intervalHours * 60 * 60 * 1000;
-    const variance = getRandomVariance(connectorConfig.randomMinutes);
+function calculateNextRun(intervalHours: number, randomMinutes: number): Date {
+    const baseMs = intervalHours * 60 * 60 * 1000;
+    const variance = getRandomVariance(randomMinutes);
     return new Date(Date.now() + baseMs + variance);
 }
 
-/**
- * Format time nicely
- */
 function formatTime(date: Date): string {
     return date.toLocaleTimeString('en-US', {
         hour: '2-digit',
@@ -102,18 +84,17 @@ function formatDuration(ms: number): string {
     return `${mins}m`;
 }
 
-// ============ CONNECTOR RUNNERS ============
+// ============ COMMAND RUNNERS ============
 
-/**
- * Run a connector command
- */
-async function runConnector(name: string, command: string): Promise<boolean> {
+async function runCommand(name: string, command: string): Promise<boolean> {
     return new Promise((resolve) => {
         console.log(`\n🚀 Starting ${name}...`);
 
-        const child = spawn('npm', ['run', command], {
+        const [cmd, ...args] = command.split(' ');
+        const child = spawn(cmd, args, {
             stdio: 'inherit',
             shell: true,
+            cwd: process.cwd(),
         });
 
         child.on('close', (code) => {
@@ -133,17 +114,18 @@ async function runConnector(name: string, command: string): Promise<boolean> {
     });
 }
 
-/**
- * Run push to sync to GitHub
- */
-async function runPush(): Promise<void> {
-    console.log('\n📤 Pushing to GitHub...');
-    await runConnector('Push', 'push');
+async function runProcessAll(): Promise<void> {
+    console.log('\n📄 Running process_all...');
+    await runCommand('Process All', 'npx ts-node src/process_all.ts');
+}
+
+async function runPushAll(): Promise<void> {
+    console.log('\n📤 Running push_all...');
+    await runCommand('Push All', 'npx ts-node src/push_all.ts');
 }
 
 // ============ MAIN DAEMON ============
 
-// PID file for daemon status detection
 const PID_FILE = './logs/get_all.pid';
 
 async function writePidFile() {
@@ -156,70 +138,80 @@ async function removePidFile() {
     const fs = await import('fs/promises');
     try {
         await fs.unlink(PID_FILE);
-    } catch {
-        // File may not exist
-    }
+    } catch { }
 }
 
 async function main() {
     console.log('🤖 Own Your Data - Unified Collector Daemon\n');
-    console.log('   Twitter & Instagram with human-like timing');
-    console.log('   (WhatsApp: run separately with npm run whatsapp:get)');
+    console.log('   Uses plugin discovery for scheduling');
     console.log('   Press Ctrl+C to stop.\n');
 
     await writePidFile();
 
     const appConfig = await loadConfig();
-    const config = appConfig.scheduler;
 
-    if (!config) {
-        console.log('⚠️ No scheduler config found. Using defaults.');
-    }
-
-    const scheduler: SchedulerConfig = config || {
-        activeHours: { start: 7, end: 23 },
-        twitter: { enabled: true, intervalHours: 6, randomMinutes: 30 },
-        instagram: { enabled: true, intervalHours: 6, randomMinutes: 30 },
-        push: { enabled: true, intervalHours: 1 },
-    };
+    // Default active hours (can be made configurable later)
+    const activeHoursStart = 7;
+    const activeHoursEnd = 23;
 
     console.log('📋 Configuration:');
-    console.log(`   Active hours: ${scheduler.activeHours.start}:00 - ${scheduler.activeHours.end}:00`);
-    console.log(`   Twitter: ${scheduler.twitter?.enabled ? `every ${scheduler.twitter.intervalHours}h (±${scheduler.twitter.randomMinutes}min)` : 'disabled'}`);
-    console.log(`   Instagram: ${scheduler.instagram?.enabled ? `every ${scheduler.instagram.intervalHours}h (±${scheduler.instagram.randomMinutes}min)` : 'disabled'}`);
-    console.log(`   Push: ${scheduler.push?.enabled ? `every ${scheduler.push.intervalHours}h` : 'disabled'}\n`);
+    console.log(`   Active hours: ${activeHoursStart}:00 - ${activeHoursEnd}:00`);
 
-    // State tracking for connectors
-    const state: Record<string, ConnectorState> = {
-        twitter: { name: 'Twitter', lastRun: null, nextRun: null, running: false, process: null },
-        instagram: { name: 'Instagram', lastRun: null, nextRun: null, running: false, process: null },
-    };
+    // Discover interval-mode plugins
+    const intervalPlugins = await getIntervalPlugins();
 
-    // Push state tracking
-    let lastPushTime: Date | null = null;
-    let nextPushTime: Date | null = null;
+    if (intervalPlugins.length === 0) {
+        console.log('⚠️ No interval-mode plugins found.');
+        await removePidFile();
+        process.exit(0);
+    }
 
-    // Schedule next run for a connector
-    const scheduleConnector = (id: string, connConfig: SchedulerConnectorConfig) => {
-        if (!connConfig.enabled) return;
+    // Initialize state for each plugin
+    const state: Record<string, PluginState> = {};
 
-        const nextRun = calculateNextRun(connConfig);
+    for (const plugin of intervalPlugins) {
+        const config = getPluginConfig(appConfig, plugin.manifest.id) as BasePluginConfig | undefined;
+        const enabled = config?.enabled ?? true;
+
+        console.log(`   ${plugin.manifest.icon} ${plugin.manifest.name}: ${enabled ? `every ${config?.intervalHours || plugin.manifest.scheduler.defaultIntervalHours}h` : 'disabled'}`);
+
+        state[plugin.manifest.id] = {
+            id: plugin.manifest.id,
+            name: plugin.manifest.name,
+            lastRun: null,
+            nextRun: null,
+            running: false,
+        };
+    }
+
+    console.log('');
+
+    // Schedule next run for a plugin
+    const schedulePlugin = (id: string, intervalHours: number, randomMinutes: number) => {
+        const nextRun = calculateNextRun(intervalHours, randomMinutes);
         state[id].nextRun = nextRun;
 
         const msUntil = nextRun.getTime() - Date.now();
         console.log(`⏰ ${state[id].name} scheduled for ${formatTime(nextRun)} (in ${formatDuration(msUntil)})`);
     };
 
-    // Run a connector and schedule next
-    const runAndSchedule = async (id: string, command: string, connConfig: SchedulerConnectorConfig) => {
+    // Run a plugin and schedule next
+    const runAndSchedule = async (plugin: DiscoveredPlugin) => {
+        const id = plugin.manifest.id;
+        const pluginConfig = getPluginConfig(appConfig, id) as BasePluginConfig | undefined;
+
+        if (!pluginConfig?.enabled) {
+            return;
+        }
+
         if (state[id].running) {
             console.log(`⏩ ${state[id].name} already running, skipping`);
             return;
         }
 
         // Check if we're in active hours
-        if (!isActiveHours(scheduler)) {
-            const sleepMs = msUntilActiveHours(scheduler);
+        if (!isActiveHours(activeHoursStart, activeHoursEnd)) {
+            const sleepMs = msUntilActiveHours(activeHoursStart);
             console.log(`😴 Outside active hours. ${state[id].name} sleeping for ${formatDuration(sleepMs)}`);
             state[id].nextRun = new Date(Date.now() + sleepMs);
             return;
@@ -228,63 +220,57 @@ async function main() {
         state[id].running = true;
         state[id].lastRun = new Date();
 
-        await runConnector(state[id].name, command);
+        await runCommand(state[id].name, plugin.manifest.commands.get);
 
         state[id].running = false;
 
         // Schedule next run
-        scheduleConnector(id, connConfig);
+        const intervalHours = pluginConfig.intervalHours || plugin.manifest.scheduler.defaultIntervalHours || 6;
+        const randomMinutes = pluginConfig.randomMinutes || plugin.manifest.scheduler.defaultRandomMinutes || 30;
+        schedulePlugin(id, intervalHours, randomMinutes);
     };
 
-    // Main loop interval (check every minute)
+    // Check interval (every minute)
     const checkInterval = 60 * 1000;
 
-    const mainLoop = async () => {
-        // Check each connector
-        for (const [id, connState] of Object.entries(state)) {
-            const connConfig = scheduler[id as keyof typeof scheduler] as SchedulerConnectorConfig | undefined;
+    // Track if any plugin just ran (for batching process/push)
+    let anyPluginRan = false;
 
-            if (!connConfig?.enabled) continue;
+    const mainLoop = async () => {
+        const currentConfig = await loadConfig();
+        anyPluginRan = false;
+
+        for (const plugin of intervalPlugins) {
+            const id = plugin.manifest.id;
+            const pluginConfig = getPluginConfig(currentConfig, id) as BasePluginConfig | undefined;
+
+            if (!pluginConfig?.enabled) continue;
 
             // First run - schedule immediately or after active hours
-            if (!connState.nextRun) {
-                if (isActiveHours(scheduler)) {
-                    // Run now with small random delay (0-5 min)
+            if (!state[id].nextRun) {
+                if (isActiveHours(activeHoursStart, activeHoursEnd)) {
                     const delay = Math.floor(Math.random() * 5 * 60 * 1000);
-                    connState.nextRun = new Date(Date.now() + delay);
-                    console.log(`🎯 ${connState.name} first run in ${formatDuration(delay)}`);
+                    state[id].nextRun = new Date(Date.now() + delay);
+                    console.log(`🎯 ${state[id].name} first run in ${formatDuration(delay)}`);
                 } else {
-                    const sleepMs = msUntilActiveHours(scheduler);
-                    connState.nextRun = new Date(Date.now() + sleepMs);
-                    console.log(`😴 ${connState.name} waiting for active hours (${formatDuration(sleepMs)})`);
+                    const sleepMs = msUntilActiveHours(activeHoursStart);
+                    state[id].nextRun = new Date(Date.now() + sleepMs);
+                    console.log(`😴 ${state[id].name} waiting for active hours (${formatDuration(sleepMs)})`);
                 }
                 continue;
             }
 
             // Check if it's time to run
-            if (Date.now() >= connState.nextRun.getTime()) {
-                const command = id === 'twitter' ? 'twitter:get' : 'instagram:get';
-                await runAndSchedule(id, command, connConfig);
+            if (Date.now() >= state[id].nextRun.getTime()) {
+                await runAndSchedule(plugin);
+                anyPluginRan = true;
             }
         }
 
-        // Check if it's time to push
-        if (scheduler.push?.enabled) {
-            if (!nextPushTime) {
-                // Schedule first push
-                const pushIntervalMs = scheduler.push.intervalHours * 60 * 60 * 1000;
-                nextPushTime = new Date(Date.now() + pushIntervalMs);
-                console.log(`📤 Push scheduled for ${formatTime(nextPushTime)} (in ${formatDuration(pushIntervalMs)})`);
-            } else if (Date.now() >= nextPushTime.getTime()) {
-                // Time to push
-                await runPush();
-                lastPushTime = new Date();
-
-                // Schedule next push
-                const pushIntervalMs = scheduler.push.intervalHours * 60 * 60 * 1000;
-                nextPushTime = new Date(Date.now() + pushIntervalMs);
-                console.log(`📤 Next push at ${formatTime(nextPushTime)} (in ${formatDuration(pushIntervalMs)})`);
-            }
+        // If any plugin ran, trigger process and push
+        if (anyPluginRan) {
+            await runProcessAll();
+            await runPushAll();
         }
     };
 

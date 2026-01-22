@@ -1,29 +1,28 @@
 /**
  * CONFIG server - Web UI for all connectors
  * Run: npm run config
+ *
+ * Uses plugin discovery to dynamically load and render plugin config sections.
  */
 
 import express from 'express';
 import * as QRCode from 'qrcode';
 import makeWASocket, { DisconnectReason } from 'baileys';
 import { Boom } from '@hapi/boom';
-import { chromium } from 'playwright'; // Add playwright import
+import { chromium } from 'playwright';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { exec } from 'child_process';
 import multer from 'multer';
-import { saveGitHubConfig, loadGitHubConfig, loadConfig, saveConfig, getResolvedPaths } from './config';
+import { saveGitHubConfig, loadGitHubConfig, loadConfig, saveConfig, getResolvedPaths, setPluginConfig } from './config';
 import { useSingleFileAuthState } from '../shared/auth-utils';
+import { discoverPlugins, loadPluginModule } from '../plugins';
 
 // Templates
 import { renderLayout } from './templates/layout';
 import { renderStorageSection } from './templates/storage';
 import { renderGitHubSection } from './templates/github';
-import { renderWhatsAppSection } from './templates/whatsapp';
-import { renderTwitterSection } from './templates/twitter';
-import { renderInstagramSection } from './templates/instagram';
 import { renderFileBrowserSection } from './templates/filebrowser';
-import { renderSchedulerSection } from './templates/scheduler';
 import { renderDependenciesSection } from './templates/dependencies';
 
 const app = express();
@@ -37,65 +36,98 @@ let currentQR: string | null = null;
 let whatsappConnected = false;
 let connectionStatus: 'checking' | 'connected' | 'needs_qr' = 'checking';
 
+// ============ HELPERS ============
+
+async function checkPlaywright(): Promise<{ installed: boolean; browsers: boolean }> {
+  let installed = false;
+  let browsers = false;
+
+  try {
+    await fs.access(path.join(process.cwd(), 'node_modules', 'playwright'));
+    installed = true;
+
+    const homeDir = process.env.HOME || process.env.USERPROFILE || '';
+    const possiblePaths = [
+      path.join(homeDir, '.cache', 'ms-playwright'),
+      path.join(homeDir, 'Library', 'Caches', 'ms-playwright'),
+      path.join(homeDir, 'AppData', 'Local', 'ms-playwright'),
+    ];
+
+    for (const cachePath of possiblePaths) {
+      try {
+        const entries = await fs.readdir(cachePath);
+        if (entries.some(e => e.toLowerCase().startsWith('chromium'))) {
+          browsers = true;
+          break;
+        }
+      } catch { }
+    }
+  } catch { }
+
+  return { installed, browsers };
+}
+
+async function checkInstagramAuth(paths: ReturnType<typeof getResolvedPaths>): Promise<boolean> {
+  try {
+    await fs.access(path.join(paths.auth, 'instagram-state.json'));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // ============ ROUTES ============
 
 // Main page
 app.get('/', async (req, res) => {
   const githubConfig = await loadGitHubConfig();
   const config = await loadConfig();
-
-  // Check if Playwright is installed
-  let playwrightInstalled = false;
-  let browsersInstalled = false;
-  try {
-    await fs.access(path.join(process.cwd(), 'node_modules', 'playwright'));
-    playwrightInstalled = true;
-
-    // Check if browsers are installed by looking in the cache directory
-    const homeDir = process.env.HOME || process.env.USERPROFILE || '';
-    const possiblePaths = [
-      path.join(homeDir, '.cache', 'ms-playwright'),           // Linux
-      path.join(homeDir, 'Library', 'Caches', 'ms-playwright'), // macOS
-      path.join(homeDir, 'AppData', 'Local', 'ms-playwright'),  // Windows
-    ];
-
-    for (const cachePath of possiblePaths) {
-      try {
-        const entries = await fs.readdir(cachePath);
-        // Look for chromium folder (e.g., "chromium-1234")
-        if (entries.some(e => e.toLowerCase().startsWith('chromium'))) {
-          browsersInstalled = true;
-          break;
-        }
-      } catch { /* dir doesn't exist */ }
-    }
-  } catch { /* playwright not installed */ }
-
-  // Get persisted collapsed state from query
+  const paths = getResolvedPaths(config);
   const savedSection = req.query.saved as string | undefined;
 
-  const sections = [
-    renderDependenciesSection({ playwrightInstalled, browsersInstalled }),
+  const playwright = await checkPlaywright();
+  const playwrightInstalled = playwright.installed && playwright.browsers;
+
+  // Build core sections first
+  const sections: string[] = [
+    renderDependenciesSection({ playwrightInstalled: playwright.installed, browsersInstalled: playwright.browsers }),
     renderStorageSection(config.storage, savedSection === 'storage'),
     renderGitHubSection(githubConfig, savedSection === 'github'),
-    renderWhatsAppSection({
-      connected: whatsappConnected,
-      status: connectionStatus,
-      qrCode: currentQR,
-      config: config.whatsapp,
-    }, savedSection === 'whatsapp'),
-    renderTwitterSection({
-      config: config.twitter,
-      playwrightInstalled,
-    }, savedSection === 'twitter'),
-    renderInstagramSection({
-      config: config.instagram,
-      playwrightInstalled,
-      isLoggedIn: await checkInstagramAuth(getResolvedPaths(config))
-    }, savedSection === 'instagram'),
-    renderSchedulerSection(config.scheduler),
-    renderFileBrowserSection(),
   ];
+
+  // Discover and render plugin sections
+  const plugins = await discoverPlugins();
+
+  for (const discovered of plugins) {
+    const plugin = await loadPluginModule(discovered.manifest.id);
+    if (!plugin) continue;
+
+    const pluginConfig = config.plugins?.[discovered.manifest.id] || plugin.getDefaultConfig();
+
+    // Build data for template
+    const data: Record<string, unknown> = {
+      playwrightInstalled,
+      justSaved: savedSection === discovered.manifest.id,
+    };
+
+    // Special handling for each plugin type
+    if (discovered.manifest.id === 'whatsapp') {
+      data.isLoggedIn = whatsappConnected;
+      data.status = connectionStatus;
+      data.qrCode = currentQR;
+    } else if (discovered.manifest.id === 'instagram') {
+      data.isLoggedIn = await checkInstagramAuth(paths);
+    }
+
+    try {
+      sections.push(plugin.renderTemplate(pluginConfig, data));
+    } catch (e) {
+      console.error(`Failed to render plugin ${discovered.manifest.id}:`, e);
+    }
+  }
+
+  // Add file browser at the end
+  sections.push(renderFileBrowserSection());
 
   res.send(renderLayout(sections));
 });
@@ -131,56 +163,31 @@ app.post('/github', async (req, res) => {
   res.redirect('/?saved=github');
 });
 
-// Save WhatsApp config
-app.post('/whatsapp', async (req, res) => {
-  const { githubPath } = req.body;
-  const config = await loadConfig();
+// Generic plugin config save route
+app.post('/plugin/:id', async (req, res) => {
+  const pluginId = req.params.id;
 
-  config.whatsapp = {
-    githubPath: githubPath || 'whatsapp',
-  };
+  try {
+    const plugin = await loadPluginModule(pluginId);
+    if (!plugin) {
+      res.status(404).send(`Plugin not found: ${pluginId}`);
+      return;
+    }
 
-  await saveConfig(config);
-  console.log('✅ WhatsApp config saved');
-  res.redirect('/?saved=whatsapp');
+    const config = await loadConfig();
+    const pluginConfig = plugin.parseFormData(req.body);
+    setPluginConfig(config, pluginId, pluginConfig);
+    await saveConfig(config);
+
+    console.log(`✅ ${plugin.manifest.name} config saved`);
+    res.redirect(`/?saved=${pluginId}`);
+  } catch (e: any) {
+    console.error(`Failed to save plugin ${pluginId}:`, e);
+    res.status(500).send(`Failed to save: ${e.message}`);
+  }
 });
 
-// Save Twitter config
-app.post('/twitter', async (req, res) => {
-  const { accounts, tweetsPerAccount, githubPath } = req.body;
-  const config = await loadConfig();
-
-  // Save Twitter config
-  const accountList = accounts ? accounts.split(',').filter((a: string) => a.trim()) : [];
-  config.twitter = {
-    githubPath: githubPath || 'twitter',
-    accounts: accountList,
-    tweetsPerAccount: parseInt(tweetsPerAccount) || 100,
-  };
-
-  await saveConfig(config);
-  console.log('✅ Twitter config saved');
-  res.redirect('/?saved=twitter');
-});
-
-// Save Instagram config
-app.post('/instagram', async (req, res) => {
-  const { accounts, postsPerAccount, githubPath } = req.body;
-  const config = await loadConfig();
-
-  const accountList = accounts ? accounts.split(',').filter((a: string) => a.trim()) : [];
-  config.instagram = {
-    githubPath: githubPath || 'instagram',
-    accounts: accountList,
-    postsPerAccount: parseInt(postsPerAccount) || 50,
-  };
-
-  await saveConfig(config);
-  console.log('✅ Instagram config saved');
-  res.redirect('/?saved=instagram');
-});
-
-// Instagram Login
+// Instagram Login (special route for Instagram plugin)
 app.post('/instagram/login', async (req, res) => {
   try {
     const config = await loadConfig();
@@ -188,7 +195,6 @@ app.post('/instagram/login', async (req, res) => {
 
     console.log('📸 Starting Instagram login flow...');
 
-    // Ensure auth dir
     await fs.mkdir(paths.auth, { recursive: true });
 
     const browser = await chromium.launch({
@@ -197,13 +203,10 @@ app.post('/instagram/login', async (req, res) => {
     const context = await browser.newContext();
     const page = await context.newPage();
 
-    // Auth state path
     const statePath = path.join(paths.auth, 'instagram-state.json');
 
-    // Goto Instagram
     await page.goto('https://www.instagram.com', { waitUntil: 'domcontentloaded' });
 
-    // Check if already logged in (unlikely if we're here, but maybe user had weird state)
     let isLoggedIn = false;
     try {
       await page.waitForSelector('a[href^="/direct/inbox/"]', { timeout: 3000 });
@@ -211,15 +214,10 @@ app.post('/instagram/login', async (req, res) => {
     } catch { }
 
     if (!isLoggedIn) {
-      // Wait for user to log in
-      // Poll for success element
       console.log('⏳ Waiting for user to log in...');
-
-      // Wait up to 5 minutes
       await page.waitForSelector('a[href^="/direct/inbox/"]', { timeout: 300000 });
     }
 
-    // Save state
     await context.storageState({ path: statePath });
     console.log('✅ Instagram session saved!');
 
@@ -240,10 +238,8 @@ app.get('/files/list', async (req, res) => {
     const basePath = process.cwd();
     let requestedPath = (req.query.path as string) || '.';
 
-    // Normalize and resolve the path
     const fullPath = path.resolve(basePath, requestedPath);
 
-    // Security: ensure path is within the project
     if (!fullPath.startsWith(basePath)) {
       res.json({ error: 'Access denied' });
       return;
@@ -258,7 +254,7 @@ app.get('/files/list', async (req, res) => {
     const entries = await fs.readdir(fullPath, { withFileTypes: true });
     const files = await Promise.all(
       entries
-        .filter(e => !e.name.startsWith('.')) // Hide hidden files
+        .filter(e => !e.name.startsWith('.'))
         .map(async (entry) => {
           const filePath = path.join(fullPath, entry.name);
           try {
@@ -280,7 +276,6 @@ app.get('/files/list', async (req, res) => {
         })
     );
 
-    // Return relative path for display
     const relativePath = path.relative(basePath, fullPath) || '.';
     res.json({ path: relativePath, files });
   } catch (e: any) {
@@ -295,7 +290,6 @@ app.get('/files/download', async (req, res) => {
     const requestedPath = (req.query.path as string) || '';
     const fullPath = path.resolve(basePath, requestedPath);
 
-    // Security check
     if (!fullPath.startsWith(basePath)) {
       res.status(403).send('Access denied');
       return;
@@ -320,13 +314,11 @@ app.post('/files/delete', async (req, res) => {
     const requestedPath = req.body.path || '';
     const fullPath = path.resolve(basePath, requestedPath);
 
-    // Security check
     if (!fullPath.startsWith(basePath)) {
       res.json({ success: false, error: 'Access denied' });
       return;
     }
 
-    // Prevent deleting critical files
     const protectedPaths = ['package.json', 'tsconfig.json', 'node_modules', 'src', '.git'];
     if (protectedPaths.some(p => fullPath.endsWith(p) || fullPath.includes('/node_modules/'))) {
       res.json({ success: false, error: 'Cannot delete protected file' });
@@ -350,12 +342,10 @@ app.post('/files/delete', async (req, res) => {
 const upload = multer({
   storage: multer.diskStorage({
     destination: (req, file, cb) => {
-      // Get path from query params (body isn't parsed yet when multer runs)
       const uploadPath = (req.query.path as string) || '.';
       const basePath = process.cwd();
       const fullPath = path.resolve(basePath, uploadPath);
 
-      // Security check
       if (!fullPath.startsWith(basePath)) {
         cb(new Error('Access denied'), '');
         return;
@@ -367,10 +357,9 @@ const upload = multer({
       cb(null, file.originalname);
     }
   }),
-  limits: { fileSize: 50 * 1024 * 1024 } // 50MB
+  limits: { fileSize: 50 * 1024 * 1024 }
 });
 
-// Check if file exists (for upload warnings)
 app.get('/files/exists', async (req, res) => {
   try {
     const basePath = process.cwd();
@@ -384,7 +373,6 @@ app.get('/files/exists', async (req, res) => {
 
     const fullPath = path.resolve(basePath, dirPath, filename);
 
-    // Security check
     if (!fullPath.startsWith(basePath)) {
       res.json({ exists: false, error: 'Access denied' });
       return;
@@ -416,44 +404,8 @@ app.post('/files/upload', upload.single('file'), async (req, res) => {
   }
 });
 
-// ============ SCHEDULER ROUTES ============
-
-// Save scheduler config (human-like timing)
-app.post('/scheduler', async (req, res) => {
-  console.log('📅 Scheduler form received:', req.body);
-
-  const config = await loadConfig();
-
-  config.scheduler = {
-    activeHours: {
-      start: parseInt(req.body.activeStart) || 7,
-      end: parseInt(req.body.activeEnd) || 23,
-    },
-    twitter: {
-      enabled: req.body.twitterEnabled === 'on',
-      intervalHours: parseInt(req.body.twitterInterval) || 6,
-      randomMinutes: parseInt(req.body.twitterRandom) || 30,
-    },
-    instagram: {
-      enabled: req.body.instagramEnabled === 'on',
-      intervalHours: parseInt(req.body.instagramInterval) || 6,
-      randomMinutes: parseInt(req.body.instagramRandom) || 30,
-    },
-    push: {
-      enabled: req.body.pushEnabled === 'on',
-      intervalHours: parseInt(req.body.pushInterval) || 1,
-    },
-  };
-
-  console.log('📅 Saving scheduler config:', JSON.stringify(config.scheduler, null, 2));
-  await saveConfig(config);
-  console.log('✅ Scheduler config saved');
-  res.redirect('/?saved=scheduler');
-});
-
 // ============ DEPENDENCIES ROUTES ============
 
-// Install Playwright browsers
 app.post('/dependencies/install-playwright', async (req, res) => {
   console.log('🔧 Installing Playwright browsers...');
 
@@ -463,8 +415,8 @@ app.post('/dependencies/install-playwright', async (req, res) => {
     const execAsync = promisify(exec);
 
     const { stdout, stderr } = await execAsync('npx playwright install chromium', {
-      timeout: 300000, // 5 minute timeout
-      maxBuffer: 10 * 1024 * 1024, // 10MB buffer
+      timeout: 300000,
+      maxBuffer: 10 * 1024 * 1024,
     });
 
     console.log('✅ Playwright browsers installed');
@@ -480,27 +432,6 @@ app.post('/dependencies/install-playwright', async (req, res) => {
       error: e.message,
       output: e.stdout || e.stderr || e.message
     });
-  }
-});
-// Check if daemon is running
-app.get('/scheduler/status', async (req, res) => {
-  const pidFile = './logs/get_all.pid';
-
-  try {
-    const pidStr = await fs.readFile(pidFile, 'utf-8');
-    const pid = parseInt(pidStr.trim());
-
-    // Check if process is running
-    try {
-      process.kill(pid, 0); // Signal 0 = just check if exists
-      res.json({ running: true, pid });
-    } catch {
-      // PID file exists but process is not running (stale)
-      await fs.unlink(pidFile).catch(() => { });
-      res.json({ running: false });
-    }
-  } catch {
-    res.json({ running: false });
   }
 });
 
@@ -630,19 +561,7 @@ app.post('/shutdown', (req, res) => {
   setTimeout(() => process.exit(0), 500);
 });
 
-// ============ HELPERS ============
-
-async function checkInstagramAuth(paths: any): Promise<boolean> {
-  try {
-    await fs.access(path.join(paths.auth, 'instagram-state.json'));
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 // ============ WHATSAPP ============
-
 
 async function checkOrStartWhatsApp() {
   const config = await loadConfig();
@@ -738,7 +657,11 @@ function openBrowser(url: string) {
 }
 
 async function main() {
-  console.log('🚀 SecondBrain Connectors Config\n');
+  console.log('🚀 SecondBrain Connectors Config (Plugin Architecture)\n');
+
+  // Discover plugins on startup
+  const plugins = await discoverPlugins();
+  console.log(`📦 Discovered ${plugins.length} plugins: ${plugins.map(p => p.manifest.name).join(', ')}\n`);
 
   const url = `http://localhost:${PORT}`;
   app.listen(PORT, () => {

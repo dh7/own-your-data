@@ -1,0 +1,21 @@
+{
+    "id": "twitter",
+    "name": "Twitter / X",
+    "icon": "🐦",
+    "description": "Scrape tweets from Twitter/X accounts",
+    "version": "1.0.0",
+    "folder": "twitter",
+    "scheduler": {
+        "mode": "interval",
+        "defaultIntervalHours": 6,
+        "defaultRandomMinutes": 30
+    },
+    "commands": {
+        "get": "ts-node src/plugins/twitter/get.ts",
+        "process": "ts-node src/plugins/twitter/process.ts",
+        "push": "ts-node src/plugins/twitter/push.ts"
+    },
+    "dependencies": {
+        "playwright": true
+    }
+}

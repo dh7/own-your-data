@@ -1,0 +1,22 @@
+{
+    "id": "instagram",
+    "name": "Instagram",
+    "icon": "📸",
+    "description": "Scrape posts from Instagram accounts",
+    "version": "1.0.0",
+    "folder": "instagram",
+    "scheduler": {
+        "mode": "interval",
+        "defaultIntervalHours": 6,
+        "defaultRandomMinutes": 30
+    },
+    "commands": {
+        "get": "ts-node src/plugins/instagram/get.ts",
+        "process": "ts-node src/plugins/instagram/process.ts",
+        "push": "ts-node src/plugins/instagram/push.ts"
+    },
+    "dependencies": {
+        "playwright": true,
+        "requiresLogin": true
+    }
+}

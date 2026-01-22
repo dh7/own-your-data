@@ -27,50 +27,14 @@ export interface GitHubConfig {
 }
 
 /**
- * WhatsApp connector configuration
+ * Base plugin configuration (all plugins share these fields)
  */
-export interface WhatsAppConfig {
-    githubPath: string;  // Path in GitHub repo (whatsapp)
-}
-
-/**
- * Twitter connector configuration
- */
-export interface TwitterConfig {
-    githubPath: string;       // Path in GitHub repo (twitter)
-    accounts: string[];       // Twitter usernames to scrape
-    tweetsPerAccount?: number; // Number of tweets per account (default: 100)
-}
-
-/**
- * Instagram connector configuration
- */
-export interface InstagramConfig {
-    githubPath: string;       // Path in GitHub repo (instagram)
-    accounts: string[];       // Instagram usernames to scrape
-    postsPerAccount?: number; // Number of posts per account (default: 50)
-}
-
-/**
- * Scheduler configuration for human-like behavior
- */
-export interface SchedulerConnectorConfig {
+export interface PluginConfig {
     enabled: boolean;
-    intervalHours: number;      // Base interval between runs
-    randomMinutes: number;      // Random variance ±minutes
-}
-
-export interface SchedulerConfig {
-    activeHours: {
-        start: number;          // Hour to start (0-23), e.g., 7
-        end: number;            // Hour to end (0-23), e.g., 23
-    };
-    twitter?: SchedulerConnectorConfig;
-    instagram?: SchedulerConnectorConfig;
-    push?: {
-        enabled: boolean;
-        intervalHours: number;  // How often to push (includes WhatsApp)
-    };
+    intervalHours?: number;
+    randomMinutes?: number;
+    githubPath?: string;
+    [key: string]: unknown;
 }
 
 /**
@@ -78,10 +42,22 @@ export interface SchedulerConfig {
  */
 export interface AppConfig {
     storage: StorageConfig;
-    whatsapp?: WhatsAppConfig;
-    twitter?: TwitterConfig;
-    instagram?: InstagramConfig;
-    scheduler?: SchedulerConfig;
+    plugins?: Record<string, PluginConfig>;
+
+    // ========== LEGACY FIELDS (for backward compatibility) ==========
+    /** @deprecated Use plugins.whatsapp */
+    whatsapp?: { githubPath: string };
+    /** @deprecated Use plugins.twitter */
+    twitter?: { githubPath: string; accounts: string[]; tweetsPerAccount?: number };
+    /** @deprecated Use plugins.instagram */
+    instagram?: { githubPath: string; accounts: string[]; postsPerAccount?: number };
+    /** @deprecated Use plugin-level scheduling */
+    scheduler?: {
+        activeHours: { start: number; end: number };
+        twitter?: { enabled: boolean; intervalHours: number; randomMinutes: number };
+        instagram?: { enabled: boolean; intervalHours: number; randomMinutes: number };
+        push?: { enabled: boolean; intervalHours: number };
+    };
 }
 
 // ============ DEFAULTS ============
@@ -93,23 +69,76 @@ const DEFAULT_STORAGE: StorageConfig = {
     connectorData: './connector_data',
 };
 
-const DEFAULT_WHATSAPP: WhatsAppConfig = {
-    githubPath: 'whatsapp',
-};
-
-const DEFAULT_TWITTER: TwitterConfig = {
-    githubPath: 'twitter',
-    accounts: [],
-    tweetsPerAccount: 100,
-};
-
-const DEFAULT_INSTAGRAM: InstagramConfig = {
-    githubPath: 'instagram',
-    accounts: [],
-    postsPerAccount: 50,
-};
-
 const CONFIG_FILE = path.join(process.cwd(), 'config.json');
+
+// ============ MIGRATION ============
+
+/**
+ * Migrate old config format to new plugin-based format
+ */
+function migrateConfig(raw: Record<string, unknown>): AppConfig {
+    const config: AppConfig = {
+        storage: { ...DEFAULT_STORAGE, ...(raw.storage as Partial<StorageConfig>) },
+    };
+
+    // Check if already migrated (has plugins field)
+    if (raw.plugins) {
+        config.plugins = raw.plugins as Record<string, PluginConfig>;
+        return config;
+    }
+
+    // Migrate from old format
+    const plugins: Record<string, PluginConfig> = {};
+
+    // Migrate Instagram
+    const oldInstagram = raw.instagram as { githubPath?: string; accounts?: string[]; postsPerAccount?: number } | undefined;
+    const oldInstaScheduler = (raw.scheduler as any)?.instagram;
+    if (oldInstagram) {
+        plugins.instagram = {
+            enabled: oldInstaScheduler?.enabled ?? true,
+            intervalHours: oldInstaScheduler?.intervalHours ?? 6,
+            randomMinutes: oldInstaScheduler?.randomMinutes ?? 30,
+            accounts: oldInstagram.accounts || [],
+            postsPerAccount: oldInstagram.postsPerAccount || 50,
+            githubPath: oldInstagram.githubPath || 'instagram',
+        };
+    }
+
+    // Migrate Twitter
+    const oldTwitter = raw.twitter as { githubPath?: string; accounts?: string[]; tweetsPerAccount?: number } | undefined;
+    const oldTwitterScheduler = (raw.scheduler as any)?.twitter;
+    if (oldTwitter) {
+        plugins.twitter = {
+            enabled: oldTwitterScheduler?.enabled ?? true,
+            intervalHours: oldTwitterScheduler?.intervalHours ?? 6,
+            randomMinutes: oldTwitterScheduler?.randomMinutes ?? 30,
+            accounts: oldTwitter.accounts || [],
+            tweetsPerAccount: oldTwitter.tweetsPerAccount || 100,
+            githubPath: oldTwitter.githubPath || 'twitter',
+        };
+    }
+
+    // Migrate WhatsApp
+    const oldWhatsApp = raw.whatsapp as { githubPath?: string } | undefined;
+    if (oldWhatsApp) {
+        plugins.whatsapp = {
+            enabled: true,
+            githubPath: oldWhatsApp.githubPath || 'whatsapp',
+        };
+    }
+
+    if (Object.keys(plugins).length > 0) {
+        config.plugins = plugins;
+    }
+
+    // Keep legacy fields for backward compatibility during transition
+    if (raw.whatsapp) config.whatsapp = raw.whatsapp as AppConfig['whatsapp'];
+    if (raw.twitter) config.twitter = raw.twitter as AppConfig['twitter'];
+    if (raw.instagram) config.instagram = raw.instagram as AppConfig['instagram'];
+    if (raw.scheduler) config.scheduler = raw.scheduler as AppConfig['scheduler'];
+
+    return config;
+}
 
 // ============ LOAD/SAVE ============
 
@@ -119,14 +148,8 @@ const CONFIG_FILE = path.join(process.cwd(), 'config.json');
 export async function loadConfig(): Promise<AppConfig> {
     try {
         const data = await fs.readFile(CONFIG_FILE, 'utf-8');
-        const config = JSON.parse(data) as Partial<AppConfig>;
-        return {
-            storage: { ...DEFAULT_STORAGE, ...config.storage },
-            whatsapp: config.whatsapp ? { ...DEFAULT_WHATSAPP, ...config.whatsapp } : undefined,
-            twitter: config.twitter ? { ...DEFAULT_TWITTER, ...config.twitter } : undefined,
-            instagram: config.instagram ? { ...DEFAULT_INSTAGRAM, ...config.instagram } : undefined,
-            scheduler: config.scheduler,
-        };
+        const raw = JSON.parse(data);
+        return migrateConfig(raw);
     } catch {
         return { storage: DEFAULT_STORAGE };
     }
@@ -137,6 +160,23 @@ export async function loadConfig(): Promise<AppConfig> {
  */
 export async function saveConfig(config: AppConfig): Promise<void> {
     await fs.writeFile(CONFIG_FILE, JSON.stringify(config, null, 2));
+}
+
+/**
+ * Get plugin config by ID
+ */
+export function getPluginConfig(config: AppConfig, pluginId: string): PluginConfig | undefined {
+    return config.plugins?.[pluginId];
+}
+
+/**
+ * Set plugin config by ID
+ */
+export function setPluginConfig(config: AppConfig, pluginId: string, pluginConfig: PluginConfig): void {
+    if (!config.plugins) {
+        config.plugins = {};
+    }
+    config.plugins[pluginId] = pluginConfig;
 }
 
 // ============ RESOLVED PATHS ============
@@ -163,17 +203,17 @@ export function getResolvedPaths(config: AppConfig) {
         apifyToken: path.join(authDir, 'twitter-token.json'),
         whatsappSession: path.join(authDir, 'whatsapp-session.json'),
 
-        // WhatsApp
+        // WhatsApp (legacy paths kept for compatibility)
         whatsappLocal: path.join(connectorDataDir, 'whatsapp'),
         whatsappLogs: path.join(logsDir, 'whatsapp'),
         whatsappRawDumps: path.join(rawDumpsDir, 'whatsapp'),
 
-        // Twitter
+        // Twitter (legacy paths kept for compatibility)
         twitterLocal: path.join(connectorDataDir, 'twitter'),
         twitterLogs: path.join(logsDir, 'twitter'),
         twitterRawDumps: path.join(rawDumpsDir, 'twitter'),
 
-        // Instagram
+        // Instagram (legacy paths kept for compatibility)
         instagramLocal: path.join(connectorDataDir, 'instagram'),
         instagramLogs: path.join(logsDir, 'instagram'),
         instagramRawDumps: path.join(rawDumpsDir, 'instagram'),
