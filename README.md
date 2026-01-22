@@ -13,53 +13,102 @@
 ---
 
 **Own Your Data** sets your digital life free.
-Local-first data connectors. Collect your conversations and contacts from various platforms and store them locally + optionally sync to your own GitHub repository.
+Local-first data connectors. Collect your conversations and posts from various platforms, store them locally, and optionally sync to your own GitHub repository.
 
-## Connectors
+## Plugins
 
-| Connector | Status | Description |
-|-----------|--------|-------------|
-| WhatsApp | ✅ Working | Messages via Baileys |
-| Twitter/X | ✅ Working | Tweets via Playwright |
-| LinkedIn | 🚧 Planned | Messages & connections |
-| Google Contacts | 🚧 Planned | Contact sync |
+| Plugin | Status | Description |
+|--------|--------|-------------|
+| 📸 Instagram | ✅ Working | Posts via Playwright |
+| 🐦 Twitter/X | ✅ Working | Tweets via Playwright |
+| 💬 WhatsApp | ✅ Working | Messages via Baileys (real-time) |
+| 🔗 LinkedIn | 🚧 Planned | Messages & connections |
+| 📇 Google Contacts | 🚧 Planned | Contact sync |
 
 ## Quick Start
 
 ```bash
 npm install
 
-# 1. Configure (once) - opens web UI
+# 1. Configure (opens web UI at http://localhost:3456)
 npm run config
 
-# 2. WhatsApp workflow
-npm run whatsapp:get      # Collect raw data
-npm run whatsapp:process  # Generate MindCache
+# 2. Start the daemon (runs all plugins on schedule)
+npm run get_all
+```
 
-# 3. Twitter workflow
-npm run twitter:get       # Scrape tweets + generate MindCache
+That's it! The daemon will automatically:
+- Run each plugin's `get → process → push` commands on schedule
+- Respect active hours (7:00 - 23:00)
+- Add random delays to mimic human behavior
 
-# 4. Sync Everything
-npm run push              # Sync all connector data to GitHub
+### Manual Commands
+
+```bash
+# Individual plugin commands
+npm run twitter:get       # Fetch tweets
+npm run twitter:process   # Generate MindCache
+npm run twitter:push      # Sync to GitHub
+
+npm run instagram:get     # Fetch posts (requires login first via config)
+npm run instagram:process # Generate viewer + markdown
+npm run instagram:push    # Sync to GitHub
+
+npm run whatsapp:get      # Real-time listener (runs until Ctrl+C)
+npm run whatsapp:process  # Process raw dumps
+npm run whatsapp:push     # Sync to GitHub
+
+# Batch commands
+npm run process_all       # Process all plugins
+npm run push_all          # Push all plugins to GitHub
 ```
 
 ## Project Structure
 
 ```
 src/
-  config/           # Shared config webapp
-  shared/           # Shared utilities
-  whatsapp/         # WhatsApp connector
-  twitter/          # Twitter connector
-  linkedin/         # LinkedIn connector
-  google-contact/   # Google Contact connector
+  plugins/              # Plugin system
+    instagram/          # 📸 Instagram plugin
+    twitter/            # 🐦 Twitter plugin
+    whatsapp/           # 💬 WhatsApp plugin
+  config/               # Config web UI
+  shared/               # Shared utilities
 
-docs/               # Website (GitHub Pages)
-auth/               # Session files (DO NOT DELETE)
-logs/               # Logs per connector
-raw-dumps/          # Raw API data per connector
-connector_data/     # Processed MindCache output (whatsapp, twitter)
-contacts/           # Synced contacts (flat)
+docs/                   # Website (GitHub Pages)
+auth/                   # Session files (DO NOT DELETE)
+logs/                   # Logs per plugin
+raw-dumps/              # Raw API data per plugin
+connector_data/         # Processed output (MindCache, viewers)
+```
+
+## Plugin Architecture
+
+Each plugin is self-contained with:
+- `manifest.json` - Metadata, scheduler config, commands
+- `config.ts` - Plugin-specific configuration types
+- `template.ts` - Config UI section
+- `get.ts` - Fetch raw data
+- `process.ts` - Process raw data into output formats
+- `push.ts` - Sync to GitHub
+
+### Config Format
+
+```json
+{
+  "storage": { ... },
+  "plugins": {
+    "twitter": {
+      "enabled": true,
+      "intervalHours": 6,
+      "randomMinutes": 30,
+      "accounts": ["karpathy", "paulg"],
+      "tweetsPerAccount": 100,
+      "githubPath": "twitter"
+    },
+    "instagram": { ... },
+    "whatsapp": { ... }
+  }
+}
 ```
 
 ## Philosophy
@@ -68,8 +117,9 @@ Your data belongs to you. These platforms hold your conversations, your contacts
 
 - **Local-first**: Everything is stored on your machine first
 - **Raw dumps**: Keep the original API responses
-- **GitHub backup**: Optional sync to your own repository
+- **GitHub backup**: Optional sync to your own private repository
 - **No cloud dependencies**: Works offline after initial setup
+- **Plugin architecture**: Easy to add new data sources
 
 ## Security Notes
 

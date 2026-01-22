@@ -20,10 +20,9 @@ import { discoverPlugins, loadPluginModule } from '../plugins';
 
 // Templates
 import { renderLayout } from './templates/layout';
-import { renderStorageSection } from './templates/storage';
+import { renderSystemSection } from './templates/system';
 import { renderGitHubSection } from './templates/github';
 import { renderFileBrowserSection } from './templates/filebrowser';
-import { renderDependenciesSection } from './templates/dependencies';
 
 const app = express();
 const PORT = 3456;
@@ -90,9 +89,12 @@ app.get('/', async (req, res) => {
 
   // Build core sections first
   const sections: string[] = [
-    renderDependenciesSection({ playwrightInstalled: playwright.installed, browsersInstalled: playwright.browsers }),
-    renderStorageSection(config.storage, savedSection === 'storage'),
     renderGitHubSection(githubConfig, savedSection === 'github'),
+    renderSystemSection(config.storage, {
+      playwrightInstalled: playwright.installed,
+      browsersInstalled: playwright.browsers,
+      daemonRunning: false, // TODO: Could check if daemon PID file exists
+    }, savedSection === 'storage'),
   ];
 
   // Discover and render plugin sections
