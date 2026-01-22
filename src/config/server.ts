@@ -421,6 +421,56 @@ app.post('/files/upload', upload.single('file'), async (req, res) => {
   }
 });
 
+// Read file content
+app.get('/files/read', async (req, res) => {
+  try {
+    const basePath = process.cwd();
+    const requestedPath = (req.query.path as string) || '';
+    const fullPath = path.resolve(basePath, requestedPath);
+
+    if (!fullPath.startsWith(basePath)) {
+      res.status(403).send('Access denied');
+      return;
+    }
+
+    const ext = path.extname(fullPath).toLowerCase();
+    if (!['.json', '.txt', '.md'].includes(ext)) {
+      res.status(400).send('Unsupported file type');
+      return;
+    }
+
+    const content = await fs.readFile(fullPath, 'utf8');
+    res.json({ content });
+  } catch (e: any) {
+    res.status(500).send(e.message);
+  }
+});
+
+// Save file content
+app.post('/files/save', async (req, res) => {
+  try {
+    const { path: requestedPath, content } = req.body;
+    const basePath = process.cwd();
+    const fullPath = path.resolve(basePath, requestedPath);
+
+    if (!fullPath.startsWith(basePath)) {
+      res.json({ success: false, error: 'Access denied' });
+      return;
+    }
+
+    const ext = path.extname(fullPath).toLowerCase();
+    if (!['.json', '.txt', '.md'].includes(ext)) {
+      res.json({ success: false, error: 'Unsupported file type' });
+      return;
+    }
+
+    await fs.writeFile(fullPath, content, 'utf8');
+    res.json({ success: true });
+  } catch (e: any) {
+    res.json({ success: false, error: e.message });
+  }
+});
+
 // ============ DEPENDENCIES ROUTES ============
 
 app.post('/dependencies/install-playwright', async (req, res) => {
