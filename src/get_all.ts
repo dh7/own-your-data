@@ -6,16 +6,14 @@
  * - More active during day, sleeps at night
  * - Random delays between runs to mimic human behavior
  *
- * NOTE: Plugins with "realtime" mode (like WhatsApp) should be run separately.
- *
- * After collecting, automatically runs process_all and push_all.
+ * Each plugin's manifest defines which commands to run (get, process, push).
  * Press Ctrl+C to stop.
  */
 
-import { spawn, ChildProcess } from 'child_process';
+import { spawn } from 'child_process';
 import { loadConfig, getPluginConfig } from './config/config';
-import { discoverPlugins, getIntervalPlugins, DiscoveredPlugin } from './plugins';
-import { BasePluginConfig } from './plugins/types';
+import { discoverPlugins, DiscoveredPlugin } from './plugins';
+import { BasePluginConfig, PluginManifest } from './plugins/types';
 
 // ============ TYPES ============
 
@@ -88,7 +86,8 @@ function formatDuration(ms: number): string {
 
 async function runCommand(name: string, command: string): Promise<boolean> {
     return new Promise((resolve) => {
-        console.log(`\n🚀 Starting ${name}...`);
+        console.log(`\n🚀 Running: ${name}`);
+        console.log(`   Command: ${command}`);
 
         const [cmd, ...args] = command.split(' ');
         const child = spawn(cmd, args, {
@@ -114,14 +113,30 @@ async function runCommand(name: string, command: string): Promise<boolean> {
     });
 }
 
-async function runProcessAll(): Promise<void> {
-    console.log('\n📄 Running process_all...');
-    await runCommand('Process All', 'npx ts-node src/process_all.ts');
-}
+/**
+ * Run all scheduled commands for a plugin based on its manifest.cmd field
+ */
+async function runPluginCommands(plugin: DiscoveredPlugin): Promise<boolean> {
+    const { manifest } = plugin;
+    const scheduledCmds = manifest.scheduler.cmd || [];
 
-async function runPushAll(): Promise<void> {
-    console.log('\n📤 Running push_all...');
-    await runCommand('Push All', 'npx ts-node src/push_all.ts');
+    console.log(`\n📦 ${manifest.icon} ${manifest.name} - Running scheduled commands: ${scheduledCmds.join(' → ')}`);
+
+    for (const cmdName of scheduledCmds) {
+        const command = manifest.commands[cmdName];
+        if (!command) {
+            console.log(`   ⚠️ Command '${cmdName}' not defined in manifest, skipping`);
+            continue;
+        }
+
+        const success = await runCommand(`${manifest.name}:${cmdName}`, command);
+        if (!success) {
+            console.log(`   ⚠️ Command '${cmdName}' failed, stopping sequence for ${manifest.name}`);
+            return false;
+        }
+    }
+
+    return true;
 }
 
 // ============ MAIN DAEMON ============
@@ -157,11 +172,11 @@ async function main() {
     console.log('📋 Configuration:');
     console.log(`   Active hours: ${activeHoursStart}:00 - ${activeHoursEnd}:00`);
 
-    // Discover interval-mode plugins
-    const intervalPlugins = await getIntervalPlugins();
+    // Discover all plugins
+    const allPlugins = await discoverPlugins();
 
-    if (intervalPlugins.length === 0) {
-        console.log('⚠️ No interval-mode plugins found.');
+    if (allPlugins.length === 0) {
+        console.log('⚠️ No plugins found.');
         await removePidFile();
         process.exit(0);
     }
@@ -169,11 +184,18 @@ async function main() {
     // Initialize state for each plugin
     const state: Record<string, PluginState> = {};
 
-    for (const plugin of intervalPlugins) {
+    for (const plugin of allPlugins) {
         const config = getPluginConfig(appConfig, plugin.manifest.id) as BasePluginConfig | undefined;
         const enabled = config?.enabled ?? true;
+        const mode = plugin.manifest.scheduler.mode;
+        const cmds = plugin.manifest.scheduler.cmd.join(', ');
 
-        console.log(`   ${plugin.manifest.icon} ${plugin.manifest.name}: ${enabled ? `every ${config?.intervalHours || plugin.manifest.scheduler.defaultIntervalHours}h` : 'disabled'}`);
+        if (mode === 'interval') {
+            const hours = config?.intervalHours || plugin.manifest.scheduler.defaultIntervalHours || 6;
+            console.log(`   ${plugin.manifest.icon} ${plugin.manifest.name}: ${enabled ? `every ${hours}h [${cmds}]` : 'disabled'}`);
+        } else {
+            console.log(`   ${plugin.manifest.icon} ${plugin.manifest.name}: ${mode} mode [${cmds}] ${enabled ? '' : '(disabled)'}`);
+        }
 
         state[plugin.manifest.id] = {
             id: plugin.manifest.id,
@@ -198,7 +220,8 @@ async function main() {
     // Run a plugin and schedule next
     const runAndSchedule = async (plugin: DiscoveredPlugin) => {
         const id = plugin.manifest.id;
-        const pluginConfig = getPluginConfig(appConfig, id) as BasePluginConfig | undefined;
+        const currentConfig = await loadConfig();
+        const pluginConfig = getPluginConfig(currentConfig, id) as BasePluginConfig | undefined;
 
         if (!pluginConfig?.enabled) {
             return;
@@ -220,32 +243,55 @@ async function main() {
         state[id].running = true;
         state[id].lastRun = new Date();
 
-        await runCommand(state[id].name, plugin.manifest.commands.get);
+        // Run all commands defined in the manifest's scheduler.cmd array
+        await runPluginCommands(plugin);
 
         state[id].running = false;
 
-        // Schedule next run
-        const intervalHours = pluginConfig.intervalHours || plugin.manifest.scheduler.defaultIntervalHours || 6;
-        const randomMinutes = pluginConfig.randomMinutes || plugin.manifest.scheduler.defaultRandomMinutes || 30;
-        schedulePlugin(id, intervalHours, randomMinutes);
+        // Schedule next run for interval-mode plugins
+        if (plugin.manifest.scheduler.mode === 'interval') {
+            const intervalHours = pluginConfig.intervalHours || plugin.manifest.scheduler.defaultIntervalHours || 6;
+            const randomMinutes = pluginConfig.randomMinutes || plugin.manifest.scheduler.defaultRandomMinutes || 30;
+            schedulePlugin(id, intervalHours, randomMinutes);
+        }
     };
 
     // Check interval (every minute)
     const checkInterval = 60 * 1000;
 
-    // Track if any plugin just ran (for batching process/push)
-    let anyPluginRan = false;
-
     const mainLoop = async () => {
         const currentConfig = await loadConfig();
-        anyPluginRan = false;
 
-        for (const plugin of intervalPlugins) {
+        for (const plugin of allPlugins) {
             const id = plugin.manifest.id;
             const pluginConfig = getPluginConfig(currentConfig, id) as BasePluginConfig | undefined;
+            const mode = plugin.manifest.scheduler.mode;
 
             if (!pluginConfig?.enabled) continue;
 
+            // For realtime mode plugins, check if we should run on a schedule anyway
+            // (e.g., WhatsApp's push command should run periodically)
+            if (mode === 'realtime') {
+                // For realtime plugins, we'll run on a default 1-hour schedule
+                // if they have commands to run
+                if (plugin.manifest.scheduler.cmd.length > 0) {
+                    if (!state[id].nextRun) {
+                        const delay = Math.floor(Math.random() * 5 * 60 * 1000);
+                        state[id].nextRun = new Date(Date.now() + delay);
+                        console.log(`🎯 ${state[id].name} (realtime) first run in ${formatDuration(delay)}`);
+                        continue;
+                    }
+
+                    if (Date.now() >= state[id].nextRun.getTime()) {
+                        await runAndSchedule(plugin);
+                        // Schedule next for 1 hour (realtime plugins still need periodic push)
+                        schedulePlugin(id, 1, 15);
+                    }
+                }
+                continue;
+            }
+
+            // For interval mode plugins
             // First run - schedule immediately or after active hours
             if (!state[id].nextRun) {
                 if (isActiveHours(activeHoursStart, activeHoursEnd)) {
@@ -263,14 +309,7 @@ async function main() {
             // Check if it's time to run
             if (Date.now() >= state[id].nextRun.getTime()) {
                 await runAndSchedule(plugin);
-                anyPluginRan = true;
             }
-        }
-
-        // If any plugin ran, trigger process and push
-        if (anyPluginRan) {
-            await runProcessAll();
-            await runPushAll();
         }
     };
 

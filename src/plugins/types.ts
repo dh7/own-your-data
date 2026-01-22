@@ -43,6 +43,8 @@ export interface PluginManifest {
         defaultIntervalHours?: number;
         /** Default random variance in minutes (for interval mode) */
         defaultRandomMinutes?: number;
+        /** Commands to run on schedule (e.g., ["get", "process", "push"]) */
+        cmd: Array<'get' | 'process' | 'push'>;
     };
 
     /** Commands to execute for each phase */

@@ -6,7 +6,10 @@
     "version": "1.0.0",
     "folder": "whatsapp",
     "scheduler": {
-        "mode": "realtime"
+        "mode": "realtime",
+        "cmd": [
+            "push"
+        ]
     },
     "commands": {
         "get": "ts-node src/plugins/whatsapp/get.ts",

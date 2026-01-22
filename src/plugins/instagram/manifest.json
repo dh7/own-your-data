@@ -8,7 +8,12 @@
     "scheduler": {
         "mode": "interval",
         "defaultIntervalHours": 6,
-        "defaultRandomMinutes": 30
+        "defaultRandomMinutes": 30,
+        "cmd": [
+            "get",
+            "process",
+            "push"
+        ]
     },
     "commands": {
         "get": "ts-node src/plugins/instagram/get.ts",
