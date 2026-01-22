@@ -37,7 +37,7 @@ export function renderTemplate(
     }
 
     return `
-<details${data.justSaved ? ' open' : ''}>
+<details>
     <summary>
         <span class="icon">📸</span>
         Instagram
