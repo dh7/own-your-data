@@ -20,3 +20,7 @@ Contains session credentials and tokens for all connectors. **Never delete, modi
 - ❌ Delete or modify anything in `auth/`
 - ❌ Remove `auth/` from `.gitignore`
 - ❌ Commit auth files or raw-dumps to git
+
+
+## Mindcache
+Always use `mindcache.toMarkdown()` to generate md files. Do not write files directly.
