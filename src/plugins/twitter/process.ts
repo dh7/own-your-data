@@ -7,6 +7,7 @@
 
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import { MindCache } from 'mindcache';
 import { loadConfig, getResolvedPaths, getTodayString } from '../../config/config';
 import { TwitterPluginConfig, DEFAULT_CONFIG } from './config';
 
@@ -19,6 +20,7 @@ interface Tweet {
         username: string;
         displayname: string;
     };
+    isRetweet?: boolean;
     replyCount: number;
     retweetCount: number;
     likeCount: number;
@@ -28,16 +30,10 @@ interface Tweet {
  * Generate MindCache format from tweets - one entry per tweet
  */
 function generateMindCache(tweets: Tweet[], username: string, exportDate: string): string {
-    const lines: string[] = [
-        '# MindCache STM Export',
-        '',
-        `Export Date: ${exportDate}`,
-        '',
-        '---',
-        '',
-        '## STM Entries',
-        '',
-    ];
+    const mindcache = new MindCache();
+
+    // Register a simplified text type implicitly used by storing string values?
+    // Or just store as text. MindCache defaults handle text.
 
     const sortedTweets = [...tweets].sort((a, b) => {
         if (!a.date || !b.date) return 0;
@@ -52,23 +48,34 @@ function generateMindCache(tweets: Tweet[], username: string, exportDate: string
             : '??:??';
 
         const keyName = `@${username} Tweets - ${dateStr} ${timeStr}`;
-        const content = tweet.content.replace(/\n/g, ' ');
-        const stats = `♥${tweet.likeCount} ↻${tweet.retweetCount} 💬${tweet.replyCount}`;
+        let content = tweet.content.replace(/\n/g, ' ');
 
-        lines.push(`### ${keyName}`);
-        lines.push(`- **Type**: \`text\``);
-        lines.push(`- **System Tags**: \`none\``);
-        lines.push(`- **Z-Index**: \`0\``);
-        lines.push(`- **Tags**: \`twitter\`, \`${dateStr}\`, \`@${username}\``);
-        lines.push(`- **Value**:`);
-        lines.push('```');
-        lines.push(content);
-        lines.push(`  ${stats} [${tweet.url}]`);
-        lines.push('```');
-        lines.push('');
+        if (tweet.isRetweet) {
+            content = `RT @${tweet.user.username}: ${content}`;
+        }
+
+        const stats = `♥${tweet.likeCount} ↻${tweet.retweetCount} 💬${tweet.replyCount}`;
+        const fullContent = `${content}\n  ${stats} [${tweet.url}]`;
+
+        const tags = [`twitter`, dateStr, `@${username}`];
+        if (tweet.isRetweet) tags.push('retweet');
+
+        // Use standard text type
+        mindcache.set_value(keyName, fullContent, {
+            contentTags: tags,
+            zIndex: 0
+        });
     }
 
-    return lines.join('\n');
+    // Add header manually since MindCache toMarkdown might not add custom headers exactly as before?
+    // MindCache adds "# MindCache STM Export" by default.
+    // We just need to ensure the export date is there if we want it.
+    // The previous implementation added "Export Date: ...".
+    // MindCache `toMarkdown` produces the standard format.
+    // If we want the metadata header, we might need to handle it or accept the standard.
+    // Standard is fine.
+
+    return mindcache.toMarkdown();
 }
 
 async function main() {

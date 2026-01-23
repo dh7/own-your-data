@@ -23,6 +23,7 @@ interface Tweet {
         username: string;
         displayname: string;
     };
+    isRetweet: boolean;
     replyCount: number;
     retweetCount: number;
     likeCount: number;
@@ -144,12 +145,18 @@ async function scrapeTweetsForUser(
                     const retweetCount = parseCount(await retweetEl?.textContent() || null);
                     const likeCount = parseCount(await likeEl?.textContent() || null);
 
+                    // Check for Retweet indicator (Social Context)
+                    const socialContextEl = await tweetEl.$('[data-testid="socialContext"]');
+                    const socialText = await socialContextEl?.textContent() || '';
+                    const isRetweet = socialText.toLowerCase().includes('retweeted');
+
                     tweets.push({
                         id,
                         url: `https://x.com/${username}/status/${id}`,
                         date: datetime || null,
                         content,
                         user: { username, displayname },
+                        isRetweet,
                         replyCount,
                         retweetCount,
                         likeCount,

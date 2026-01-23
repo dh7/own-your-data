@@ -161,7 +161,29 @@ async function main() {
             const mindcache = new MindCache();
             for (const tweet of tweets) {
                 if (tweet.id) {
-                    mindcache.set(tweet.id, tweetToMindCacheEntry(tweet));
+                    const contentValues = tweetToMindCacheEntry(tweet);
+                    const tags = ['twitter'];
+
+                    if (tweet.user?.username) {
+                        tags.push(`@${tweet.user.username}`);
+                    }
+
+                    if (tweet.date || tweet.timestamp) {
+                        const d = new Date(tweet.date || tweet.timestamp || '');
+                        if (!isNaN(d.getTime())) {
+                            tags.push(d.toISOString().split('T')[0]);
+                        }
+                    }
+
+                    if (tweet.isRetweet) {
+                        tags.push('retweet');
+                    }
+
+                    // Use set_value to support tags
+                    mindcache.set_value(tweet.id, contentValues, {
+                        contentTags: tags,
+                        zIndex: 0
+                    });
                 }
             }
 
