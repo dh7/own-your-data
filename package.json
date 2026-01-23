@@ -18,6 +18,12 @@
     "instagram:get": "ts-node src/plugins/instagram/get.ts",
     "instagram:process": "ts-node src/plugins/instagram/process.ts",
     "instagram:push": "ts-node src/plugins/instagram/push.ts",
+    "linkedin:process": "ts-node src/plugins/linkedin/process.ts",
+    "linkedin:push": "ts-node src/plugins/linkedin/push.ts",
+    "google-contacts:process": "ts-node src/plugins/google-contacts/process.ts",
+    "google-contacts:push": "ts-node src/plugins/google-contacts/push.ts",
+    "gcontact:process": "ts-node src/plugins/google-contacts/process.ts",
+    "gcontact:push": "ts-node src/plugins/google-contacts/push.ts",
     "build": "tsc",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
