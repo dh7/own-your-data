@@ -58,16 +58,10 @@ function cleanCaption(caption: string): string {
     return cleaned;
 }
 
+import { MindCache } from 'mindcache';
+
 function generateMarkdown(username: string, posts: InstaPost[]): string {
-    const lines: string[] = [
-        `# Instagram - @${username}`,
-        '',
-        `Last updated: ${new Date().toISOString().split('T')[0]}`,
-        `Total posts: ${posts.length}`,
-        '',
-        '---',
-        ''
-    ];
+    const mindcache = new MindCache();
 
     const sortedPosts = [...posts].sort((a, b) => {
         const dateA = a.date ? new Date(a.date).getTime() : 0;
@@ -76,32 +70,39 @@ function generateMarkdown(username: string, posts: InstaPost[]): string {
     });
 
     for (const post of sortedPosts) {
-        const date = formatDate(post.date);
+        const dateStr = formatDate(post.date) || 'Unknown date';
+        const dateIso = post.date ? new Date(post.date).toISOString().split('T')[0] : 'unknown';
         const caption = cleanCaption(post.caption);
         const imagePath = post.id ? `./images/${username}/${post.id}.jpg` : '';
 
-        lines.push(`## ${date || 'Unknown date'}`);
-        lines.push('');
+        // Generate content similar to manual markdown but structured for MindCache
+        // We will store the full visual representation as the value (since it's rich text/markdown)
+        const contentLines = [];
+        if (imagePath) contentLines.push(`![Post](${imagePath})`);
+        if (caption) contentLines.push(caption);
+        contentLines.push(`❤️ ${post.likes} likes`);
+        contentLines.push(`[View on Instagram](${post.url})`);
 
-        if (imagePath) {
-            lines.push(`![Post](${imagePath})`);
-            lines.push('');
-        }
+        const value = contentLines.join('\n\n');
 
-        if (caption) {
-            lines.push(caption);
-            lines.push('');
-        }
+        // Use post ID or date as key. Since date isn't unique, append ID or index.
+        const keyName = `${dateIso}_${post.id || Math.random().toString(36).substr(2, 9)}`;
 
-        lines.push(`❤️ ${post.likes} likes`);
-        lines.push('');
-        lines.push(`[View on Instagram](${post.url})`);
-        lines.push('');
-        lines.push('---');
-        lines.push('');
+        mindcache.set_value(keyName, value, {
+            contentTags: ['instagram', `@${username}`, dateIso],
+            zIndex: post.likes || 0 // Use likes as z-index for interesting sorting? Or just 0.
+        });
     }
 
-    return lines.join('\n');
+    // Add header info as a special meta entry or just rely on file name?
+    // MindCache `toMarkdown` generates a standard header.
+    // If we want the specific "Last updated" header, we can add a meta entry.
+    mindcache.set('meta_stats', JSON.stringify({
+        lastUpdated: new Date().toISOString().split('T')[0],
+        totalPosts: posts.length
+    }));
+
+    return mindcache.toMarkdown();
 }
 
 function generateViewerHTML(username: string, posts: InstaPost[]): string {
