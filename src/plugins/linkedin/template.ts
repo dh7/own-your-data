@@ -20,12 +20,17 @@ export function renderTemplate(
     const folderName = cfg.folderName || DEFAULT_CONFIG.folderName;
     const githubPath = cfg.githubPath || DEFAULT_CONFIG.githubPath;
 
-    // Check if the CSV file exists
-    const csvPath = path.join(process.cwd(), 'raw-dumps', folderName, 'Connections.csv');
-    const fileExists = fs.existsSync(csvPath);
+    // Check if the CSV files exist
+    const folderPath = path.join(process.cwd(), 'raw-dumps', folderName);
+    const hasConnections = fs.existsSync(path.join(folderPath, 'Connections.csv'));
+    const hasImported = fs.existsSync(path.join(folderPath, 'ImportedContacts.csv'));
+    const hasMessages = fs.existsSync(path.join(folderPath, 'messages.csv'));
 
-    const statusClass = fileExists ? 'connected' : 'pending';
-    const statusText = fileExists ? '✅ Ready' : '⚠️ Setup needed';
+    // We consider it "Ready" if at least the main Connections file is there, but we show status for all
+    const isReady = hasConnections || hasImported || hasMessages;
+
+    const statusClass = isReady ? 'connected' : 'pending';
+    const statusText = isReady ? '✅ Ready' : '⚠️ Setup needed';
 
     return `
 <details${data.justSaved ? ' open' : ''}>
@@ -35,15 +40,29 @@ export function renderTemplate(
         <span class="status ${statusClass}">${statusText}</span>
     </summary>
     <div class="section-content">
-        ${fileExists ? `
-            <div class="success" style="margin-bottom: 1rem;">
-                ✅ <strong>File found:</strong> <code>raw-dumps/${folderName}/Connections.csv</code>
-            </div>
-        ` : `
+        <div style="margin-bottom: 1rem; padding: 1rem; border-radius: 6px; background: rgba(255, 255, 255, 0.05);">
+            <div style="margin-bottom: 0.5rem; font-weight: bold;">File Status (raw-dumps/${folderName}/):</div>
+            <ul style="list-style: none; padding: 0; margin: 0;">
+                <li style="margin-bottom: 0.25rem;">
+                    ${hasConnections ? '✅' : '❌'} <code>Connections.csv</code> 
+                    <span style="opacity: 0.7; font-size: 0.9em;">(Primary contacts)</span>
+                </li>
+                <li style="margin-bottom: 0.25rem;">
+                    ${hasImported ? '✅' : '❌'} <code>ImportedContacts.csv</code>
+                    <span style="opacity: 0.7; font-size: 0.9em;">(Synced contacts)</span>
+                </li>
+                <li>
+                    ${hasMessages ? '✅' : '❌'} <code>messages.csv</code>
+                    <span style="opacity: 0.7; font-size: 0.9em;">(Message history)</span>
+                </li>
+            </ul>
+        </div>
+
+        ${!isReady ? `
             <div class="warning" style="margin-bottom: 1rem; border-left: 4px solid #e3b341; background: rgba(227, 179, 65, 0.1); padding: 1rem;">
-                <strong>Missing File</strong><br>
-                Please export your LinkedIn connections and save the file to:<br>
-                <code>raw-dumps/${folderName}/Connections.csv</code>
+                <strong>Missing Files</strong><br>
+                Please export your LinkedIn data and save the files to:<br>
+                <code>raw-dumps/${folderName}/</code>
             </div>
             
             <details style="margin-bottom: 1rem; background: #0d1117; padding: 0.5rem; border-radius: 4px;">
@@ -51,12 +70,13 @@ export function renderTemplate(
                 <ol style="margin-top: 0.5rem; margin-left: 1.5rem; color: #8b949e;">
                     <li>Go to <strong>Me</strong> > <strong>Settings & Privacy</strong></li>
                     <li>Select <strong>Data privacy</strong> > <strong>Get a copy of your data</strong></li>
-                    <li>Select <strong>Connections</strong> and click <strong>Request archive</strong></li>
-                    <li>Wait for the email (usually fast), download, and extract</li>
-                    <li>Rename <code>Connections.csv</code> and move it to the folder above</li>
+                    <li>Select <strong>Download larger data archive</strong> (includes everything)</li>
+                    <li>Request archive and wait for the email</li>
+                    <li>Download and unzip the archive</li>
+                    <li>Copy <code>Connections.csv</code>, <code>ImportedContacts.csv</code>, and <code>messages.csv</code> to the folder above</li>
                 </ol>
             </details>
-        `}
+        ` : ''}
 
         <form action="/plugin/linkedin" method="POST">
             <div>

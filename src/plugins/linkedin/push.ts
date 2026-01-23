@@ -1,15 +1,34 @@
 /**
- * LinkedIn PUSH script - Sync contacts to GitHub
+ * LinkedIn PUSH script - Sync contacts and messages to GitHub
  * Run: npm run linkedin:push
  */
 
-import * as fs from 'fs/promises';
-import * as path from 'path';
 import { MindCache } from 'mindcache';
 import { GitStore, MindCacheSync } from '@mindcache/gitstore';
 import { loadConfig, getResolvedPaths, loadGitHubConfig, getTodayString } from '../../config/config';
 import { LinkedInPluginConfig, DEFAULT_CONFIG } from './config';
-import { Contact, CONTACT_SCHEMA } from '../../shared/contact';
+import { CONTACT_SCHEMA } from '../../shared/contact';
+import { loadLinkedInContacts, loadLinkedInMessages } from './utils';
+import * as path from 'path';
+
+function buildConversationTranscript(title: string, msgs: any[]): string {
+    const lines = [`# ${title}`, ''];
+    msgs.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    for (const msg of msgs) {
+        const dateStr = msg.date.replace(' UTC', '');
+        let content = msg.content || '';
+        content = content
+            .replace(/<br\s*\/?>/gi, '\n')
+            .replace(/<\/p>/gi, '\n')
+            .replace(/<[^>]+>/g, '')
+            .replace(/&quot;/g, '"')
+            .replace(/&amp;/g, '&')
+            .trim();
+        lines.push(`*${dateStr}* **${msg.from}**: ${content}`);
+        lines.push('');
+    }
+    return lines.join('\n');
+}
 
 async function main() {
     const config = await loadConfig();
@@ -38,111 +57,91 @@ async function main() {
         tokenProvider: async () => githubConfig.token,
     });
 
-    const outputDir = path.join(paths.connectorData, folderName);
-    const mdPath = path.join(outputDir, 'linkedin-contacts.md');
+    const rawDumpsDir = path.join(paths.rawDumps, folderName);
 
-    try {
-        await fs.access(mdPath);
-    } catch {
-        console.log(`⚠️ No processed data found. Run "npm run linkedin:process" first.`);
-        return;
+    // --- SYNC CONTACTS ---
+    const contacts = await loadLinkedInContacts(rawDumpsDir, false);
+    if (contacts.length > 0) {
+        const contactCache = new MindCache();
+        contactCache.registerType('Contact', CONTACT_SCHEMA);
+
+        for (const contact of contacts) {
+            if (!contact.name) continue;
+            const key = `contact_linkedin_${contact.name.replace(/\s+/g, '_').replace(/[^\w]/g, '').toLowerCase()}`;
+            contactCache.set(key, JSON.stringify(contact));
+            contactCache.setType(key, 'Contact');
+        }
+        contactCache.set('last_sync_linkedin_contacts', new Date().toISOString());
+
+        const targetFile = `${githubPath}/linkedin.md`;
+
+        const syncContacts = new MindCacheSync(gitStore, contactCache, {
+            filePath: targetFile,
+            instanceName: 'LinkedIn Contacts',
+        });
+
+        try {
+            await syncContacts.save({ message: `LinkedIn: ${contacts.length} contacts` });
+            console.log(`   ✅ Synced ${contacts.length} contacts to ${targetFile}`);
+        } catch (error: any) {
+            console.error(`   ❌ Failed to sync contacts: ${error.message}`);
+        }
+    } else {
+        console.log('   ⚠️ No contacts to sync.');
     }
 
-    // Read the processed Markdown file (which mimics MindCache format)
-    // Actually, for the Push script, we should probably re-parse the contacts or read the intermediate JSON if we saved one. 
-    // `process.ts` saved a `.md` file for local viewing/storage, but `MindCacheSync` expects a `MindCache` object.
-    // We can parse the contacts from the Markdown we just wrote, OR (better) `process.ts` could also output a JSON file for `push.ts` to consume easier.
-    // However, specifically for this implementation, let's parse the contacts back from the JSON blocks inside the generated MD, 
-    // or just re-process the CSV if we want to be pure. 
-    // Let's re-process the CSV to build the MindCache object cleanly for sync, 
-    // as parsing the MD back is brittle and redundant given we have the source.
+    // --- SYNC MESSAGES ---
+    const messages = await loadLinkedInMessages(rawDumpsDir);
+    if (messages.length > 0) {
+        const messageCache = new MindCache();
 
-    // WAIT: Users workflow is typically Get -> Process -> Push.
-    // If Process generates the artifact, Push should sync it.
-    // But `process.ts` did the heavy lifting of parsing CSV.
-    // Let's modify `process.ts` to also save `contacts.json` to make `push.ts` life easier?
-    // User requirement: "The process extracts the meaningfull informations ... into mindcache files."
-    // `process.ts` generates the file.
-    // If I re-read the CSV here, it's duplication but robust.
+        // Group by conversation
+        const conversations = new Map<string, any[]>();
+        for (const msg of messages) {
+            if (!msg.conversationId) continue;
+            if (!conversations.has(msg.conversationId)) conversations.set(msg.conversationId, []);
+            conversations.get(msg.conversationId)!.push(msg);
+        }
 
-    const rawDumpsDir = path.join(paths.rawDumps, folderName);
-    const csvPath = path.join(rawDumpsDir, 'Connections.csv');
-    // We'll import the parsing logic or just duplicate the minimal part needed to get the objects.
-    // For simplicity and robustness, I will re-parse the Markdown file or re-read CSV? 
-    // Re-reading CSV is safer than parsing Markdown.
+        for (const [convId, msgs] of conversations) {
+            const firstMsg = msgs[0];
+            const title = firstMsg.conversationTitle || 'Conversation';
+            const transcript = buildConversationTranscript(title, msgs);
 
-    // We need parseCSV again... wait I can't import `mapToContact` from `process.ts` easily unless I export it.
-    // Let's just assume `process.ts` worked and we use the CSV.
+            const key = `linkedin_conv_${convId.replace(/[^a-zA-Z0-9]/g, '_')}`;
 
-    const { parseCSV } = require('../../shared/csv');
-
-    let contacts: Contact[] = [];
-
-    try {
-        const content = await fs.readFile(csvPath, 'utf-8');
-        const lines = content.split('\n');
-        let headerIndex = -1;
-        for (let i = 0; i < lines.length; i++) {
-            if (lines[i].includes('First Name')) {
-                headerIndex = i;
-                break;
+            // Use set_value to store raw markdown content directly
+            // @ts-ignore - set_value might not be in the definition if older version, but passing string usually works for text
+            if (typeof messageCache.set_value === 'function') {
+                messageCache.set_value(key, transcript, {
+                    contentTags: ['linkedin', 'conversation', 'message'],
+                    zIndex: 0
+                });
+            } else {
+                // Fallback if set_value missing (older mindcache?)
+                // Trying to trick it by registering a lax schema
+                messageCache.registerType('text', '#Text\n* content: string');
+                messageCache.set(key, JSON.stringify({ content: transcript }));
+                messageCache.setType(key, 'text');
             }
         }
-        if (headerIndex === -1) throw new Error('No header found');
-        const cleanCsv = lines.slice(headerIndex).join('\n');
-        const rows = parseCSV(cleanCsv);
 
-        // Re-implement mapping (simple version)
-        contacts = rows.map((row: any) => {
-            const contact: Contact = {
-                name: `${row['First Name'] || ''} ${row['Last Name'] || ''}`.trim(),
-                company: row['Company'],
-                role: row['Position'],
-                email: row['Email Address'],
-                linkedin: row['URL'],
-            };
-            const connectedOn = row['Connected On'];
-            if (connectedOn) contact.notes = `Connected on: ${connectedOn}`;
+        messageCache.set('last_sync_linkedin_messages', new Date().toISOString());
 
-            // Clean
-            if (!contact.email) delete contact.email;
-            if (!contact.company) delete contact.company;
-            if (!contact.role) delete contact.role;
-            if (!contact.linkedin) delete contact.linkedin;
+        const messagesFile = `${githubPath}/messages.md`;
+        const syncMessages = new MindCacheSync(gitStore, messageCache, {
+            filePath: messagesFile,
+            instanceName: 'LinkedIn Messages',
+        });
 
-            return contact.name ? contact : null;
-        }).filter((c: any) => c) as Contact[];
-
-    } catch (e) {
-        console.log('⚠️ Could not read CSV source for push. Ensure process ran correctly or CSV exists.');
-        return;
-    }
-
-    const mindcache = new MindCache();
-
-    // REGISTER THE SCHEMA
-    mindcache.registerType('Contact', CONTACT_SCHEMA);
-
-    for (const contact of contacts) {
-        const key = `contact_linkedin_${contact.name.replace(/\s+/g, '_').toLowerCase()}`;
-        // Set Value (JSON) and Type (Contact)
-        mindcache.set(key, JSON.stringify(contact));
-        mindcache.setType(key, 'Contact');
-    }
-
-    mindcache.set('last_sync_linkedin', new Date().toISOString());
-
-    const syncFile = `${githubPath}/linkedin.md`; // This will be the remote file name
-    const sync = new MindCacheSync(gitStore, mindcache, {
-        filePath: syncFile,
-        instanceName: 'LinkedIn Connector',
-    });
-
-    try {
-        await sync.save({ message: `LinkedIn: ${contacts.length} contacts` });
-        console.log(`   ✅ Synced ${contacts.length} contacts to ${syncFile}`);
-    } catch (error: any) {
-        console.error(`   ❌ Failed to sync: ${error.message}`);
+        try {
+            await syncMessages.save({ message: `LinkedIn: ${conversations.size} conversations (${messages.length} messages)` });
+            console.log(`   ✅ Synced ${conversations.size} conversations to ${messagesFile}`);
+        } catch (error: any) {
+            console.error(`   ❌ Failed to sync messages: ${error.message}`);
+        }
+    } else {
+        console.log('   ⚠️ No messages to sync.');
     }
 
     console.log('✨ Done!');

@@ -7,41 +7,11 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import { loadConfig, getResolvedPaths, getTodayString } from '../../config/config';
 import { LinkedInPluginConfig, DEFAULT_CONFIG } from './config';
-import { parseCSV } from '../../shared/csv';
 import { Contact, CONTACT_SCHEMA } from '../../shared/contact';
+import { LinkedinMessage, MESSAGE_SCHEMA } from './types';
+import { loadLinkedInContacts, loadLinkedInMessages } from './utils';
 
-// Map CSV headers to Contact properties
-function mapToContact(row: Record<string, string>): Contact {
-    const contact: Contact = {
-        name: `${row['First Name'] || ''} ${row['Last Name'] || ''}`.trim(),
-        company: row['Company'],
-        role: row['Position'],
-        email: row['Email Address'],
-        linkedin: row['URL'],
-    };
-
-    // Add extra info to notes
-    const connectedOn = row['Connected On'];
-    let notes = '';
-
-    if (connectedOn) {
-        notes += `Connected on: ${connectedOn}\n`;
-    }
-
-    // Clean up empty fields
-    if (!contact.email) delete contact.email;
-    if (!contact.company) delete contact.company;
-    if (!contact.role) delete contact.role;
-    if (!contact.linkedin) delete contact.linkedin;
-
-    if (notes) {
-        contact.notes = notes.trim();
-    }
-
-    return contact;
-}
-
-function generateMindCacheContent(contacts: Contact[], exportDate: string): string {
+function generateContactMarkdown(contacts: Contact[], exportDate: string): string {
     const lines: string[] = [
         '# MindCache STM Export',
         '',
@@ -60,19 +30,79 @@ function generateMindCacheContent(contacts: Contact[], exportDate: string): stri
     ];
 
     for (const contact of contacts) {
-        if (!contact.name) continue; // Skip empty names
+        if (!contact.name) continue;
 
-        // Create a unique key (MindCache style)
-        const keyName = `contact_linkedin_${contact.name.replace(/\s+/g, '_').toLowerCase()}`;
+        const keyName = `contact_linkedin_${contact.name.replace(/\s+/g, '_').replace(/[^\w]/g, '').toLowerCase()}`;
 
         lines.push(`### ${keyName}`);
         lines.push(`- **Type**: \`Contact\``);
-        lines.push(`- **System Tags**: \`none\``);
-        lines.push(`- **Z-Index**: \`0\``);
         lines.push(`- **Tags**: \`linkedin\`, \`contact\``);
         lines.push(`- **Value**:`);
         lines.push('```json');
         lines.push(JSON.stringify(contact, null, 2));
+        lines.push('```');
+        lines.push('');
+    }
+
+    return lines.join('\n');
+}
+
+function generateMessageMarkdown(messages: LinkedinMessage[], exportDate: string): string {
+    const lines: string[] = [
+        '# MindCache STM Export - Messages',
+        '',
+        `Export Date: ${exportDate}`,
+        '',
+        '---',
+        '',
+        '## STM Entries',
+        '',
+    ];
+
+    // Group by conversation
+    const conversations = new Map<string, LinkedinMessage[]>();
+    for (const msg of messages) {
+        if (!msg.conversationId) continue;
+        if (!conversations.has(msg.conversationId)) {
+            conversations.set(msg.conversationId, []);
+        }
+        conversations.get(msg.conversationId)!.push(msg);
+    }
+
+    for (const [convId, msgs] of conversations) {
+        // Sort by date
+        msgs.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+        const firstMsg = msgs[0];
+        const title = firstMsg.conversationTitle || 'Conversation';
+
+        // Create a readable key
+        const keyName = `linkedin_conv_${convId.replace(/[^a-zA-Z0-9]/g, '_')}`;
+
+        lines.push(`### ${keyName}`);
+        lines.push(`- **Type**: \`text\``);
+        lines.push(`- **Tags**: \`linkedin\`, \`conversation\``);
+        lines.push(`- **Value**:`);
+        lines.push('```markdown');
+        lines.push(`# ${title}`);
+        lines.push('');
+
+        for (const msg of msgs) {
+            const dateStr = msg.date.replace(' UTC', '');
+
+            // Basic HTML stripping
+            let content = msg.content || '';
+            content = content
+                .replace(/<br\s*\/?>/gi, '\n')
+                .replace(/<\/p>/gi, '\n')
+                .replace(/<[^>]+>/g, '') // Remove remaining tags
+                .replace(/&quot;/g, '"')
+                .replace(/&amp;/g, '&')
+                .trim();
+
+            lines.push(`*${dateStr}* **${msg.from}**: ${content}`);
+            lines.push('');
+        }
         lines.push('```');
         lines.push('');
     }
@@ -97,55 +127,31 @@ async function main() {
 
     await fs.mkdir(outputDir, { recursive: true });
 
-    // Look for Connections.csv
-    const csvPath = path.join(rawDumpsDir, 'Connections.csv');
-
-    try {
-        const content = await fs.readFile(csvPath, 'utf-8');
-
-        // Skip lines until "First Name" header is found (LinkedIn export has notes at the top)
-        const lines = content.split('\n');
-        let headerIndex = -1;
-        for (let i = 0; i < lines.length; i++) {
-            if (lines[i].includes('First Name')) {
-                headerIndex = i;
-                break;
-            }
-        }
-
-        if (headerIndex === -1) {
-            console.error('❌ Could not find "First Name" header in Connections.csv');
-            return;
-        }
-
-        const cleanCsv = lines.slice(headerIndex).join('\n');
-        const rows = parseCSV(cleanCsv);
-
-        console.log(`   Found ${rows.length} rows in CSV.`);
-
-        const contacts = rows.map(mapToContact).filter(c => c.name.length > 0);
-
-        if (contacts.length === 0) {
-            console.log('   ⚠️ No valid contacts found.');
-            return;
-        }
-
-        // Generate Markdown
-        const mdContent = generateMindCacheContent(contacts, today);
-        const mdPath = path.join(outputDir, 'linkedin-contacts.md');
-        await fs.writeFile(mdPath, mdContent);
-
-        console.log(`   ✅ Generated ${path.basename(mdPath)} (${contacts.length} contacts)`);
-        console.log(`\n✨ Done! Files saved to: ${outputDir}`);
-
-    } catch (error: any) {
-        if (error.code === 'ENOENT') {
-            console.log(`⚠️ Connections.csv not found in ${rawDumpsDir}`);
-            console.log(`   Please export your connections from LinkedIn and place "Connections.csv" in that folder.`);
-        } else {
-            console.error('❌ Error processing LinkedIn data:', error);
-        }
+    // 1. Process Contacts
+    const contacts = await loadLinkedInContacts(rawDumpsDir);
+    if (contacts.length > 0) {
+        const contactMd = generateContactMarkdown(contacts, today);
+        const contactPath = path.join(outputDir, 'linkedin-contacts.md');
+        await fs.writeFile(contactPath, contactMd);
+        console.log(`   ✅ Generated ${path.basename(contactPath)} (${contacts.length} contacts)`);
+    } else {
+        console.log('   ⚠️ No contacts found.');
     }
+
+    // 2. Process Messages
+    const messages = await loadLinkedInMessages(rawDumpsDir);
+    if (messages.length > 0) {
+        const messageMd = generateMessageMarkdown(messages, today);
+        const messagePath = path.join(outputDir, 'linkedin-messages.md');
+        await fs.writeFile(messagePath, messageMd);
+        // Count conversations for logging
+        const convCount = new Set(messages.map(m => m.conversationId)).size;
+        console.log(`   ✅ Generated ${path.basename(messagePath)} (${convCount} conversations, ${messages.length} messages)`);
+    } else {
+        console.log('   ⚠️ No messages found.');
+    }
+
+    console.log(`\n✨ Done! Files saved to: ${outputDir}`);
 }
 
 main().catch(console.error);
