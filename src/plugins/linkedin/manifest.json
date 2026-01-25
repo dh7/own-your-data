@@ -6,13 +6,8 @@
     "version": "1.0.0",
     "folder": "linkedin",
     "scheduler": {
-        "mode": "interval",
-        "defaultIntervalHours": 24,
-        "defaultRandomMinutes": 0,
-        "cmd": [
-            "process",
-            "push"
-        ]
+        "mode": "manual",
+        "cmd": []
     },
     "commands": {
         "get": "echo 'No get command for LinkedIn. Export manually.'",

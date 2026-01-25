@@ -1,7 +1,5 @@
-/**
- * OpenAI plugin template
- */
-
+import * as fs from 'fs';
+import * as path from 'path';
 import { BasePluginConfig, PluginRenderData } from '../types';
 import { OpenAIPluginConfig, DEFAULT_CONFIG } from './config';
 
@@ -26,12 +24,27 @@ export function renderTemplate(
     const exportFolder = cfg.exportFolder || '';
     const githubPath = cfg.githubPath || DEFAULT_CONFIG.githubPath;
 
+    // Check if output file exists to get "last processed" date
+    const outputPath = path.join(process.cwd(), 'connector_data', githubPath || 'openai', 'openai-conversations.md');
+    let lastProcessed: Date | null = null;
+    try {
+        const stat = fs.statSync(outputPath);
+        lastProcessed = stat.mtime;
+    } catch { }
+
+    let statusClass = 'pending';
+    let statusText = '⚠️ Not processed';
+    if (lastProcessed) {
+        statusClass = 'connected';
+        statusText = `✅ Done on ${lastProcessed.toLocaleDateString()}`;
+    }
+
     return `
 <details>
     <summary>
         <span class="icon">🤖</span>
         OpenAI / ChatGPT
-        <span class="status ${enabled ? 'connected' : 'pending'}">${enabled ? 'Enabled' : 'Disabled'}</span>
+        <span class="status ${statusClass}">${statusText}</span>
     </summary>
     <div class="section-content">
         <p class="description" style="color: #8b949e; margin-bottom: 1rem;">

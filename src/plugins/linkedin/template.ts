@@ -29,8 +29,23 @@ export function renderTemplate(
     // We consider it "Ready" if at least the main Connections file is there, but we show status for all
     const isReady = hasConnections || hasImported || hasMessages;
 
-    const statusClass = isReady ? 'connected' : 'pending';
-    const statusText = isReady ? '✅ Ready' : '⚠️ Setup needed';
+    // Check if output file exists to get "last processed" date
+    const outputPath = path.join(process.cwd(), 'connector_data', githubPath || 'linkedin', 'linkedin-contacts.md');
+    let lastProcessed: Date | null = null;
+    try {
+        const stat = fs.statSync(outputPath);
+        lastProcessed = stat.mtime;
+    } catch { }
+
+    let statusClass = 'pending';
+    let statusText = '⚠️ Setup needed';
+    if (lastProcessed) {
+        statusClass = 'connected';
+        statusText = `✅ Done on ${lastProcessed.toLocaleDateString()}`;
+    } else if (isReady) {
+        statusClass = 'warning';
+        statusText = '⏳ Not processed yet';
+    }
 
     return `
 <details${data.justSaved ? ' open' : ''}>

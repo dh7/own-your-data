@@ -7,10 +7,7 @@
     "folder": "openAI",
     "scheduler": {
         "mode": "manual",
-        "cmd": [
-            "process",
-            "push"
-        ]
+        "cmd": []
     },
     "commands": {
         "process": "ts-node src/plugins/openai/process.ts",

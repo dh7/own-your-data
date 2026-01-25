@@ -24,8 +24,23 @@ export function renderTemplate(
     const csvPath = path.join(process.cwd(), 'raw-dumps', folderName, 'contacts.csv');
     const fileExists = fs.existsSync(csvPath);
 
-    const statusClass = fileExists ? 'connected' : 'pending';
-    const statusText = fileExists ? '✅ Ready' : '⚠️ Setup needed';
+    // Check if output file exists to get "last processed" date
+    const outputPath = path.join(process.cwd(), 'connector_data', githubPath || 'gcontact', 'google-contacts.md');
+    let lastProcessed: Date | null = null;
+    try {
+        const stat = fs.statSync(outputPath);
+        lastProcessed = stat.mtime;
+    } catch { }
+
+    let statusClass = 'pending';
+    let statusText = '⚠️ Setup needed';
+    if (lastProcessed) {
+        statusClass = 'connected';
+        statusText = `✅ Done on ${lastProcessed.toLocaleDateString()}`;
+    } else if (fileExists) {
+        statusClass = 'warning';
+        statusText = '⏳ Not processed yet';
+    }
 
     return `
 <details${data.justSaved ? ' open' : ''}>
