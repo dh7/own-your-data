@@ -1,8 +1,21 @@
 {
     "id": "openai",
     "name": "OpenAI",
+    "icon": "🤖",
     "description": "Process and sync OpenAI ChatGPT export data",
     "version": "1.0.0",
+    "folder": "openAI",
+    "scheduler": {
+        "mode": "manual",
+        "cmd": [
+            "process",
+            "push"
+        ]
+    },
+    "commands": {
+        "process": "ts-node src/plugins/openai/process.ts",
+        "push": "ts-node src/plugins/openai/push.ts"
+    },
     "author": "Antigravity",
     "license": "MIT"
 }

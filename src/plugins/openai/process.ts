@@ -149,8 +149,12 @@ async function main() {
 
         for (const node of thread) {
             if (!node.message) continue;
-            const role = node.message.author.role.toUpperCase();
+
             const text = formatMessageContent(node.message.content);
+            // Skip empty messages (common with system start nodes or empty tool outputs)
+            if (!text || !text.trim()) continue;
+
+            const role = node.message.author.role.toUpperCase();
 
             transcriptLines.push(`**${role}**:`);
             transcriptLines.push(text);

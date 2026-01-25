@@ -138,8 +138,10 @@ async function main() {
 
         const transcriptLines = [`# ${title}`, `Date: ${date.toLocaleString()}`, ''];
         for (const node of thread) {
-            const role = node.message.author.role.toUpperCase();
             const text = formatMessageContent(node.message.content);
+            if (!text || !text.trim()) continue;
+
+            const role = node.message.author.role.toUpperCase();
             transcriptLines.push(`**${role}**:`);
             transcriptLines.push(text);
             transcriptLines.push('');
