@@ -2,7 +2,8 @@
  * System section - Dependencies, Daemon control, and Storage Paths
  */
 
-import { StorageConfig } from '../config';
+import { AppConfig, StorageConfig } from '../config';
+import { DiscoveredPlugin } from '../../plugins';
 
 export interface SystemStatus {
     playwrightInstalled: boolean;
@@ -11,10 +12,13 @@ export interface SystemStatus {
 }
 
 export function renderSystemSection(
-    config: StorageConfig,
+    appConfig: AppConfig,
+    plugins: DiscoveredPlugin[],
     status: SystemStatus,
     justSaved: boolean = false
 ): string {
+    const config = appConfig.storage;
+    const daemon = appConfig.daemon || { activeHours: { start: 7, end: 23 } };
     const allDepsGood = status.playwrightInstalled && status.browsersInstalled;
 
     let statusHtml = '';
@@ -26,6 +30,36 @@ export function renderSystemSection(
     } else {
         statusHtml = '<span class="status warning">⚠️ Dependency Missing</span>';
     }
+
+    // Schedule Recap Table
+    const scheduleRows = plugins.map(p => {
+        const pConfig = appConfig.plugins?.[p.manifest.id];
+        const enabled = pConfig?.enabled ?? true;
+        const interval = pConfig?.intervalHours ?? p.manifest.scheduler.defaultIntervalHours ?? 6;
+        const random = pConfig?.randomMinutes ?? p.manifest.scheduler.defaultRandomMinutes ?? 30;
+
+        let scheduleText = '';
+        if (p.manifest.scheduler.mode === 'interval') {
+            scheduleText = `Every <strong>${interval}h</strong> ± ${random}m`;
+        } else if (p.manifest.scheduler.mode === 'manual') {
+            scheduleText = '<span style="color:#8b949e">Manual only</span>';
+        } else {
+            scheduleText = p.manifest.scheduler.mode;
+        }
+
+        return `
+        <tr style="opacity: ${enabled ? 1 : 0.5}">
+            <td style="padding: 0.5rem;">${p.manifest.icon} ${p.manifest.name}</td>
+            <td style="padding: 0.5rem;">
+                ${enabled
+                ? `<span style="color:#7ee787">Enabled</span>`
+                : `<span style="color:#8b949e">Disabled</span>`}
+            </td>
+            <td style="padding: 0.5rem;">
+                ${scheduleText}
+            </td>
+        </tr>`;
+    }).join('');
 
     return `
 <details>
@@ -62,9 +96,41 @@ export function renderSystemSection(
 
         <!-- Daemon Control -->
         <h3 style="margin-bottom: 1rem; color: #58a6ff;">🤖 Data Collection Daemon</h3>
-        <p style="color: #8b949e; margin-bottom: 1rem;">
-            The daemon runs in the background and automatically collects data from all enabled plugins on schedule.
-        </p>
+        
+        <form action="/daemon" method="POST" style="margin-bottom: 1.5rem; background: #0d1117; padding: 1rem; border-radius: 6px; border: 1px solid #30363d;">
+            <div style="display: flex; gap: 2rem; align-items: center; margin-bottom: 1rem;">
+                <div>
+                    <label style="display: block; margin-bottom: 0.5rem; color: #8b949e;">Active Hours (Start)</label>
+                    <input type="number" name="startHour" value="${daemon.activeHours.start}" min="0" max="23" style="width: 80px;" />
+                </div>
+                <div>
+                    <label style="display: block; margin-bottom: 0.5rem; color: #8b949e;">Active Hours (End)</label>
+                    <input type="number" name="endHour" value="${daemon.activeHours.end}" min="0" max="24" style="width: 80px;" />
+                </div>
+                <div style="flex: 1; display: flex; align-items: flex-end; justify-content: flex-end;">
+                    <button type="submit" class="small-btn">💾 Save Settings</button>
+                </div>
+            </div>
+            <p style="color: #8b949e; font-size: 0.85em;">
+                The daemon will only collect data between these hours to mimic human behavior.
+            </p>
+        </form>
+
+        <div style="margin-bottom: 1.5rem;">
+            <h4 style="margin-bottom: 0.75rem; color: #79c0ff;">Schedule Recap</h4>
+            <table style="width: 100%; text-align: left; border-collapse: collapse; font-size: 0.9em;">
+                <thead>
+                    <tr style="border-bottom: 1px solid #30363d; color: #8b949e;">
+                        <th style="padding: 0.5rem;">Plugin</th>
+                        <th style="padding: 0.5rem;">Status</th>
+                        <th style="padding: 0.5rem;">Schedule</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${scheduleRows}
+                </tbody>
+            </table>
+        </div>
         
         <div style="padding: 1rem; background: #0a1a0a; border: 1px solid #2a4a2a; border-radius: 4px;">
             <p style="color: #7ee787; margin-bottom: 0.75rem;">
@@ -76,7 +142,7 @@ export function renderSystemSection(
             <p style="color: #8b949e; margin-top: 0.75rem; font-size: 0.85em;">
                 The daemon will:<br>
                 • Run each plugin's commands (get → process → push) on schedule<br>
-                • Respect active hours (default: 7:00 - 23:00)<br>
+                • Respect active hours (${daemon.activeHours.start}:00 - ${daemon.activeHours.end}:00)<br>
                 • Add random delays to mimic human behavior<br>
                 • Press Ctrl+C to stop
             </p>

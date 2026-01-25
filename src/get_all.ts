@@ -165,9 +165,9 @@ async function main() {
 
     const appConfig = await loadConfig();
 
-    // Default active hours (can be made configurable later)
-    const activeHoursStart = 7;
-    const activeHoursEnd = 23;
+    // Active scheduling hours
+    const activeHoursStart = appConfig.daemon?.activeHours.start ?? 7;
+    const activeHoursEnd = appConfig.daemon?.activeHours.end ?? 23;
 
     console.log('📋 Configuration:');
     console.log(`   Active hours: ${activeHoursStart}:00 - ${activeHoursEnd}:00`);

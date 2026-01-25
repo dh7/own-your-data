@@ -9,7 +9,7 @@
  * - interval: Runs periodically (e.g., Twitter, Instagram)
  * - realtime: Runs continuously as a listener (e.g., WhatsApp)
  */
-export type SchedulerMode = 'interval' | 'realtime';
+export type SchedulerMode = 'interval' | 'realtime' | 'manual';
 
 /**
  * Plugin manifest - stored in manifest.json in each plugin folder

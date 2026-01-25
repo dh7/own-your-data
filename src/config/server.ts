@@ -99,13 +99,16 @@ app.get('/', async (req, res) => {
   const playwrightInstalled = playwright.installed && playwright.browsers;
   const daemonRunning = await checkDaemonRunning();
 
+  // Discover and render plugin sections
+  const plugins = await discoverPlugins();
+
   // Build core sections first: System, File Browser, GitHub
   const sections: string[] = [
-    renderSystemSection(config.storage, {
+    renderSystemSection(config, plugins, {
       playwrightInstalled: playwright.installed,
       browsersInstalled: playwright.browsers,
       daemonRunning,
-    }, savedSection === 'system' || savedSection === 'storage'),
+    }, savedSection === 'system' || savedSection === 'storage' || savedSection === 'daemon'),
     renderFileBrowserSection(),
     renderGitHubSection(githubConfig, savedSection === 'github'),
   ];
@@ -113,8 +116,7 @@ app.get('/', async (req, res) => {
   // Add title-style divider before plugins
   sections.push(renderPluginsDivider());
 
-  // Discover and render plugin sections
-  const plugins = await discoverPlugins();
+
 
   for (const discovered of plugins) {
     const plugin = await loadPluginModule(discovered.manifest.id);
@@ -165,6 +167,24 @@ app.post('/storage', async (req, res) => {
   console.log('✅ Storage config saved');
   res.redirect('/?saved=storage');
 });
+
+// Save daemon config
+app.post('/daemon', async (req, res) => {
+  const { startHour, endHour } = req.body;
+  const config = await loadConfig();
+
+  config.daemon = {
+    activeHours: {
+      start: parseInt(startHour) || 7,
+      end: parseInt(endHour) || 23
+    }
+  };
+
+  await saveConfig(config);
+  console.log('✅ Daemon config saved');
+  res.redirect('/?saved=daemon');
+});
+
 
 // Save GitHub config
 app.post('/github', async (req, res) => {

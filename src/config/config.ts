@@ -42,6 +42,7 @@ export interface PluginConfig {
  */
 export interface AppConfig {
     storage: StorageConfig;
+    daemon?: DaemonConfig;
     plugins?: Record<string, PluginConfig>;
 
     // ========== LEGACY FIELDS (for backward compatibility) ==========
@@ -57,6 +58,16 @@ export interface AppConfig {
         twitter?: { enabled: boolean; intervalHours: number; randomMinutes: number };
         instagram?: { enabled: boolean; intervalHours: number; randomMinutes: number };
         push?: { enabled: boolean; intervalHours: number };
+    };
+}
+
+/**
+ * Daemon configuration (scheduling, etc)
+ */
+export interface DaemonConfig {
+    activeHours: {
+        start: number;
+        end: number;
     };
 }
 
@@ -79,6 +90,9 @@ const CONFIG_FILE = path.join(process.cwd(), 'config.json');
 function migrateConfig(raw: Record<string, unknown>): AppConfig {
     const config: AppConfig = {
         storage: { ...DEFAULT_STORAGE, ...(raw.storage as Partial<StorageConfig>) },
+        daemon: (raw.daemon as DaemonConfig) || {
+            activeHours: { start: 7, end: 23 }
+        },
     };
 
     // Check if already migrated (has plugins field)
