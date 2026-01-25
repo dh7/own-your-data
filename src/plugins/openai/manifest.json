@@ -1,0 +1,8 @@
+{
+    "id": "openai",
+    "name": "OpenAI",
+    "description": "Process and sync OpenAI ChatGPT export data",
+    "version": "1.0.0",
+    "author": "Antigravity",
+    "license": "MIT"
+}

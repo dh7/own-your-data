@@ -24,6 +24,8 @@
     "google-contacts:push": "ts-node src/plugins/google-contacts/push.ts",
     "gcontact:process": "ts-node src/plugins/google-contacts/process.ts",
     "gcontact:push": "ts-node src/plugins/google-contacts/push.ts",
+    "openai:process": "ts-node src/plugins/openai/process.ts",
+    "openai:push": "ts-node src/plugins/openai/push.ts",
     "build": "tsc",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
