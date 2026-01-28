@@ -194,7 +194,7 @@ export function renderTemplate(
             <summary style="cursor: pointer; color: #58a6ff; font-weight: 600;">📖 Setup Instructions</summary>
             <ol style="margin-top: 1rem; margin-left: 1.5rem; color: #c9d1d9; line-height: 2;">
                 <li>
-                    <a href="/plugin/chrome-history/download-extension" style="color: #58a6ff; font-weight: 500;">⬇️ Download the extension .zip</a>
+                    <a href="/zip?folder=src/plugins/chrome-history/extension&name=chrome-extension" style="color: #58a6ff; font-weight: 500;">⬇️ Download the extension .zip</a>
                 </li>
                 <li>Unzip the downloaded file</li>
                 <li>

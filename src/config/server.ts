@@ -267,6 +267,58 @@ app.post('/instagram/login', async (req, res) => {
   }
 });
 
+// Generic folder zip download
+// Usage: /zip?folder=src/plugins/chrome-history/extension&name=chrome-extension
+app.get('/zip', async (req, res) => {
+  const folderPath = req.query.folder as string;
+  const zipName = (req.query.name as string) || 'download';
+
+  if (!folderPath) {
+    res.status(400).send('Missing folder parameter');
+    return;
+  }
+
+  try {
+    const basePath = process.cwd();
+    const fullPath = path.resolve(basePath, folderPath);
+
+    // Security: ensure path is within project
+    if (!fullPath.startsWith(basePath)) {
+      res.status(403).send('Access denied');
+      return;
+    }
+
+    await fs.access(fullPath);
+    const stat = await fs.stat(fullPath);
+
+    if (!stat.isDirectory()) {
+      res.status(400).send('Path is not a directory');
+      return;
+    }
+
+    // Create zip
+    const { promisify } = await import('util');
+    const execAsync = promisify(exec);
+
+    const safeZipName = `${zipName.replace(/[^a-zA-Z0-9-_]/g, '')}.zip`;
+    const zipPath = path.join(basePath, 'logs', safeZipName);
+
+    await fs.mkdir(path.join(basePath, 'logs'), { recursive: true });
+
+    try {
+      await fs.unlink(zipPath);
+    } catch { }
+
+    await execAsync(`cd "${fullPath}" && zip -r "${zipPath}" .`);
+    console.log(`📦 Created zip: ${safeZipName}`);
+
+    res.download(zipPath, safeZipName);
+  } catch (e: any) {
+    console.error(`Failed to create zip:`, e);
+    res.status(500).send(`Failed to create zip: ${e.message}`);
+  }
+});
+
 // ============ FILE BROWSER ROUTES ============
 
 // List files in directory
