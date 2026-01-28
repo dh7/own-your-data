@@ -1,0 +1,25 @@
+{
+    "id": "chrome-history",
+    "name": "Chrome History",
+    "icon": "🌐",
+    "description": "Track and save all URLs you visit with the Chrome extension",
+    "version": "1.0.0",
+    "folder": "chrome-history",
+    "scheduler": {
+        "mode": "interval",
+        "defaultIntervalHours": 24,
+        "defaultRandomMinutes": 60,
+        "cmd": [
+            "push"
+        ]
+    },
+    "commands": {
+        "server": "ts-node src/plugins/chrome-history/server.ts",
+        "push": "ts-node src/plugins/chrome-history/push.ts"
+    },
+    "dependencies": {
+        "playwright": false,
+        "requiresLogin": false,
+        "chromeExtension": true
+    }
+}
