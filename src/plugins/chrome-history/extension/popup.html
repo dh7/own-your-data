@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Own Your Data - URL Tracker</title>
+    <link rel="stylesheet" href="popup.css">
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">
+                <span class="logo-icon">🧠</span>
+                <h1>Own Your Data</h1>
+            </div>
+            <p class="subtitle">URL Tracker</p>
+        </header>
+
+        <!-- Connection Status -->
+        <section class="connection-status" id="connectionStatus">
+            <div class="status-icon" id="statusIcon">⏳</div>
+            <div class="status-text">
+                <span id="statusTitle">Checking connection...</span>
+                <span id="statusDetail" class="status-detail"></span>
+            </div>
+        </section>
+
+        <!-- Stats -->
+        <section class="stats">
+            <div class="stat-card">
+                <span class="stat-value" id="totalCount">-</span>
+                <span class="stat-label">Total URLs</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-value" id="todayCount">-</span>
+                <span class="stat-label">Today</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-value" id="syncedCount">-</span>
+                <span class="stat-label">Synced</span>
+            </div>
+        </section>
+
+        <!-- Recent Activity -->
+        <section class="recent">
+            <h2>Recent Activity</h2>
+            <ul id="recentList" class="recent-list">
+                <li class="loading">Loading...</li>
+            </ul>
+        </section>
+
+        <!-- Settings (collapsible) -->
+        <details class="settings-panel" id="settingsPanel">
+            <summary>⚙️ Settings</summary>
+            <div class="settings-content">
+                <div class="setting-row">
+                    <label for="apiKeyInput">API Key</label>
+                    <div class="input-with-toggle">
+                        <input type="password" id="apiKeyInput" placeholder="Paste from config page" />
+                        <button type="button" id="toggleApiKey" class="toggle-visibility" title="Show/Hide">
+                            👁️
+                        </button>
+                    </div>
+                    <p class="setting-help" id="apiKeyHelp"></p>
+                </div>
+                <div class="setting-row">
+                    <label for="serverUrlInput">Server URL</label>
+                    <input type="text" id="serverUrlInput" placeholder="http://localhost:3457/api/chrome-history" />
+                </div>
+            </div>
+        </details>
+
+        <footer>
+            <p>📡 URLs sync to server automatically</p>
+        </footer>
+    </div>
+
+    <script src="popup.js"></script>
+</body>
+
+</html>
