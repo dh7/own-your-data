@@ -301,9 +301,32 @@
             vertical-align: text-top;
         }
 
-        .github-btn {
+        .header-actions {
             display: flex;
             align-items: center;
+            gap: 1rem;
+        }
+
+        .discord-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            background: #5865F2;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            font-size: 0.875rem;
+            font-weight: 600;
+            font-family: 'JetBrains Mono', monospace;
+            border-radius: 6px;
+            cursor: pointer;
+            text-decoration: none;
+            transition: background 0.2s;
+        }
+
+        .discord-btn:hover {
+            background: #4752c4;
+            text-decoration: none;
         }
     </style>
 </head>
@@ -312,7 +335,8 @@
     <div class="container">
         <div class="header">
             <h1>Own Your Data</h1>
-            <div class="github-btn">
+            <div class="header-actions">
+                <a href="https://discord.gg/gpWGbfX5ZX" target="_blank" class="discord-btn">💬 Join Discord</a>
                 <iframe
                     src="https://ghbtns.com/github-btn.html?user=dh7&repo=own-your-data&type=star&count=true&size=large"
                     frameborder="0" scrolling="0" width="170" height="30" title="GitHub"></iframe>
@@ -365,6 +389,16 @@
                 <h4>👥 Google Contacts</h4>
                 <span class="status planned">◯ Manual</span>
                 <p class="desc">Contact sync</p>
+            </div>
+            <div class="connector" id="connector-chrome" onclick="showInstruction('chrome')">
+                <h4>🌐 Chrome History</h4>
+                <span class="status working">✓ Automated</span>
+                <p class="desc">URLs via extension</p>
+            </div>
+            <div class="connector" id="connector-openai" onclick="showInstruction('openai')">
+                <h4>🤖 OpenAI</h4>
+                <span class="status planned">◯ Manual</span>
+                <p class="desc">ChatGPT export</p>
             </div>
         </div>
 
@@ -451,6 +485,43 @@
                         <a href="https://contacts.google.com" target="_blank">
                             Open Google Contacts <span class="external-link-icon">↗</span>
                         </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chrome History Instructions -->
+            <div id="instruction-chrome" class="instruction-block">
+                <h3>Commands</h3>
+                <div class="commands">
+                    <pre><span class="comment"># Setup (once)</span>
+<code>npm run config</code>        <span class="comment"># Download extension & copy API key</span>
+
+<span class="comment"># Start the receiver server</span>
+<code>npm run chrome:server</code>  <span class="comment"># Must be running to receive URLs</span>
+
+<span class="comment"># Push (automated via scheduler)</span>
+<code>npm run chrome:push</code>    <span class="comment"># Sync to GitHub</span></pre>
+                </div>
+            </div>
+
+            <!-- OpenAI Instructions -->
+            <div id="instruction-openai" class="instruction-block">
+                <h3>OpenAI ChatGPT Export</h3>
+                <div class="commands" style="border-left: 3px solid #58a6ff;">
+                    <p style="margin-bottom: 1rem; color: #c9d1d9;">Export your ChatGPT conversations via OpenAI's data
+                        export.</p>
+                    <ol class="step-list">
+                        <li>Go to <a href="https://chat.openai.com" target="_blank">chat.openai.com</a> and log in.</li>
+                        <li>Click your profile icon → <strong>Settings</strong>.</li>
+                        <li>Select <strong>Data Controls</strong>.</li>
+                        <li>Click <strong>Export data</strong>.</li>
+                        <li>You'll receive an email with a download link.</li>
+                        <li>Extract the zip and place <code>conversations.json</code> in <code>raw-dumps/openAI/</code>.
+                        </li>
+                    </ol>
+                    <div style="margin-top: 1.5rem;">
+                        <pre><code>npm run openai:process</code>  <span class="comment"># Process conversations</span>
+<code>npm run openai:push</code>     <span class="comment"># Sync to GitHub</span></pre>
                     </div>
                 </div>
             </div>

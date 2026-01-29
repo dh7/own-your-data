@@ -33,6 +33,31 @@ export function renderLayout(sections: string[]): string {
             font-weight: 700;
             margin-bottom: 1.5rem;
         }
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        .discord-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            background: #5865F2;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            font-size: 0.875rem;
+            font-weight: 600;
+            font-family: 'JetBrains Mono', monospace;
+            border-radius: 6px;
+            cursor: pointer;
+            text-decoration: none;
+            transition: background 0.2s;
+        }
+        .discord-btn:hover {
+            background: #4752c4;
+            text-decoration: none;
+        }
         .close-btn {
             background: #da3633;
             color: white;
@@ -275,7 +300,7 @@ export function renderLayout(sections: string[]): string {
 </head>
 <body>
     <div class="container">
-        <h1>Own your data <button onclick="closeConfig()" class="close-btn">✕ Close</button></h1>
+        <h1>Own your data <div class="header-actions"><a href="https://discord.gg/gpWGbfX5ZX" target="_blank" class="discord-btn">💬 Join Discord</a><button onclick="closeConfig()" class="close-btn">✕ Close</button></div></h1>
         ${sections.join('\n')}
     </div>
     

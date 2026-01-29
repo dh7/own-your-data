@@ -225,6 +225,10 @@ export function renderTemplate(
             <code>npm run chrome:server</code> - Start receiver server (port ${serverPort})<br>
             <code>npm run chrome:push</code> - Manually sync to GitHub
         </p>
+
+        <p style="margin-top: 1rem; font-size: 0.85rem;">
+            💬 <a href="https://discord.gg/Er8SY365" target="_blank" style="color: #5865F2;">Join our Discord community</a> for help & feedback!
+        </p>
     </div>
 </details>
 
