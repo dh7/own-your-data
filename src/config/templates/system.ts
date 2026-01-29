@@ -77,7 +77,6 @@ export function renderSystemSection(
         ${allDepsGood ? `
             <p style="color: #7ee787;">✅ Playwright package installed</p>
             <p style="color: #7ee787;">✅ Playwright browsers installed</p>
-            <p style="color: #8b949e; margin-top: 0.5rem; font-size: 0.9em;">Twitter and Instagram collectors are ready to use.</p>
         ` : `
             <p>${status.playwrightInstalled ? '<span style="color:#7ee787;">✅</span>' : '<span style="color:#ff7b72;">❌</span>'} Playwright package ${status.playwrightInstalled ? 'installed' : 'missing'}</p>
             <p>${status.browsersInstalled ? '<span style="color:#7ee787;">✅</span>' : '<span style="color:#f0a030;">⚠️</span>'} Playwright browsers ${status.browsersInstalled ? 'installed' : 'need install'}</p>
@@ -97,8 +96,7 @@ export function renderSystemSection(
         `}
 
         <!-- Syncthing -->
-        <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #30363d;">
-            <h4 style="margin-bottom: 0.75rem; color: #79c0ff;">🔄 Syncthing</h4>
+        <div style="margin-top: 1.5rem; padding-top: 1rem;">
             ${status.syncthingInstalled ? `
                 <p style="color: #7ee787;">✅ Syncthing installed</p>
                 <div style="margin-top: 1rem; padding: 1rem; background: #0a1a1a; border: 1px solid #2a4a4a; border-radius: 4px;">
