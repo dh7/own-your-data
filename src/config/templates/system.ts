@@ -9,6 +9,7 @@ export interface SystemStatus {
     playwrightInstalled: boolean;
     browsersInstalled: boolean;
     daemonRunning: boolean;
+    syncthingInstalled: boolean;
 }
 
 export function renderSystemSection(
@@ -71,6 +72,8 @@ export function renderSystemSection(
     <div class="section-content">
         <!-- Dependencies -->
         <h3 style="margin-bottom: 1rem; color: #58a6ff;">🔧 Dependencies</h3>
+        
+        <!-- Playwright -->
         ${allDepsGood ? `
             <p style="color: #7ee787;">✅ Playwright package installed</p>
             <p style="color: #7ee787;">✅ Playwright browsers installed</p>
@@ -86,11 +89,35 @@ export function renderSystemSection(
                 <code style="background: #0a0a0a; padding: 0.5rem 1rem; border-radius: 4px; display: block;">
                     npx playwright install chromium
                 </code>
-                <button type="button" onclick="location.reload()" style="margin-top: 1rem;" class="btn secondary">
+                <button type="button" onclick="recheckPlaywright(this)" style="margin-top: 1rem;" class="btn secondary">
                     🔄 Recheck
                 </button>
+                <span id="playwright-recheck-status" style="margin-left: 0.5rem;"></span>
             </div>
         `}
+
+        <!-- Syncthing -->
+        <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #30363d;">
+            <h4 style="margin-bottom: 0.75rem; color: #79c0ff;">🔄 Syncthing</h4>
+            ${status.syncthingInstalled ? `
+                <p style="color: #7ee787;">✅ Syncthing installed</p>
+                <div style="margin-top: 1rem; padding: 1rem; background: #0a1a1a; border: 1px solid #2a4a4a; border-radius: 4px;">
+                    <p style="color: #8b949e; margin-bottom: 0.75rem;">Access the Syncthing Web GUI to manage sync folders and devices:</p>
+                    <a href="http://localhost:8384" target="_blank" class="btn" style="display: inline-block; text-decoration: none;">
+                        🌐 Open Syncthing GUI
+                    </a>
+                </div>
+            ` : `
+                <p style="color: #f0a030;">⚠️ Syncthing not installed</p>
+                <p style="color: #8b949e; margin-top: 0.5rem; font-size: 0.9em;">Syncthing enables P2P file synchronization across your devices.</p>
+                <div style="margin-top: 1rem; padding: 1rem; background: #1a1a0a; border: 1px solid #4a4a2a; border-radius: 4px;">
+                    <button type="button" onclick="installSyncthing(this)" class="btn">
+                        📦 Install Syncthing
+                    </button>
+                    <p id="syncthing-install-status" style="margin-top: 0.5rem; font-size: 0.85em; color: #8b949e;"></p>
+                </div>
+            `}
+        </div>
 
         <hr style="margin: 1.5rem 0; border: none; border-top: 1px solid #30363d;" />
 

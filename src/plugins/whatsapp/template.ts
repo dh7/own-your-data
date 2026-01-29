@@ -46,8 +46,28 @@ export function renderTemplate(
                     </p>
                 </div>
                 <script>
-                    // Auto-refresh while waiting for connection
-                    setTimeout(() => location.reload(), 3000);
+                    // Poll for connection status without reloading the page
+                    (function pollWhatsAppStatus() {
+                        setTimeout(async () => {
+                            try {
+                                const res = await fetch('/status');
+                                const data = await res.json();
+                                if (data.connected) {
+                                    // Only reload when connected
+                                    location.reload();
+                                } else if (data.qr) {
+                                    // Update QR code image without reloading
+                                    const img = document.querySelector('.qr-container img');
+                                    if (img) img.src = data.qr;
+                                    pollWhatsAppStatus();
+                                } else {
+                                    pollWhatsAppStatus();
+                                }
+                            } catch (e) {
+                                pollWhatsAppStatus();
+                            }
+                        }, 3000);
+                    })();
                 </script>
             `
         }

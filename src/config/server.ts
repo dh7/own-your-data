@@ -86,6 +86,18 @@ async function checkDaemonRunning(): Promise<boolean> {
   }
 }
 
+async function checkSyncthing(): Promise<boolean> {
+  const { promisify } = await import('util');
+  const execAsync = promisify(exec);
+  
+  try {
+    await execAsync('which syncthing');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // ============ ROUTES ============
 
 // Main page
@@ -98,6 +110,7 @@ app.get('/', async (req, res) => {
   const playwright = await checkPlaywright();
   const playwrightInstalled = playwright.installed && playwright.browsers;
   const daemonRunning = await checkDaemonRunning();
+  const syncthingInstalled = await checkSyncthing();
 
   // Discover and render plugin sections
   const plugins = await discoverPlugins();
@@ -108,6 +121,7 @@ app.get('/', async (req, res) => {
       playwrightInstalled: playwright.installed,
       browsersInstalled: playwright.browsers,
       daemonRunning,
+      syncthingInstalled,
     }, savedSection === 'system' || savedSection === 'storage' || savedSection === 'daemon'),
     renderFileBrowserSection(),
     renderGitHubSection(githubConfig, savedSection === 'github'),
@@ -545,6 +559,11 @@ app.post('/files/save', async (req, res) => {
 
 // ============ DEPENDENCIES ROUTES ============
 
+app.get('/dependencies/check-playwright', async (req, res) => {
+  const result = await checkPlaywright();
+  res.json(result);
+});
+
 app.post('/dependencies/install-playwright', async (req, res) => {
   console.log('🔧 Installing Playwright browsers...');
 
@@ -566,6 +585,50 @@ app.post('/dependencies/install-playwright', async (req, res) => {
     });
   } catch (e: any) {
     console.error('❌ Failed to install Playwright browsers:', e.message);
+    res.json({
+      success: false,
+      error: e.message,
+      output: e.stdout || e.stderr || e.message
+    });
+  }
+});
+
+app.post('/dependencies/install-syncthing', async (req, res) => {
+  console.log('🔧 Installing Syncthing...');
+
+  try {
+    const { promisify } = await import('util');
+    const execAsync = promisify(exec);
+    
+    const platform = process.platform;
+    let installCmd: string;
+    
+    if (platform === 'darwin') {
+      installCmd = 'brew install syncthing';
+    } else if (platform === 'linux') {
+      // Try apt first, fall back to snap
+      installCmd = 'sudo apt-get install -y syncthing || sudo snap install syncthing';
+    } else {
+      res.json({
+        success: false,
+        error: 'Automatic installation not supported on this platform. Please install Syncthing manually from https://syncthing.net/downloads/'
+      });
+      return;
+    }
+
+    const { stdout, stderr } = await execAsync(installCmd, {
+      timeout: 300000,
+      maxBuffer: 10 * 1024 * 1024,
+    });
+
+    console.log('✅ Syncthing installed');
+    res.json({
+      success: true,
+      message: 'Syncthing installed successfully!',
+      output: stdout + (stderr ? '\n' + stderr : '')
+    });
+  } catch (e: any) {
+    console.error('❌ Failed to install Syncthing:', e.message);
     res.json({
       success: false,
       error: e.message,

@@ -291,6 +291,60 @@ export function renderLayout(sections: string[]): string {
             document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;color:#7ee787;font-size:1.25rem;font-family:JetBrains Mono,monospace;"><div>> Config saved. You can close this tab.</div></div>';
         }, 100);
     }
+    
+    async function recheckPlaywright(btn) {
+        const statusEl = document.getElementById('playwright-recheck-status');
+        btn.disabled = true;
+        statusEl.textContent = 'Checking...';
+        statusEl.style.color = '#f0a030';
+        
+        try {
+            const res = await fetch('/dependencies/check-playwright');
+            const data = await res.json();
+            
+            if (data.installed && data.browsers) {
+                statusEl.textContent = '✅ All good! Refresh page to update UI.';
+                statusEl.style.color = '#7ee787';
+            } else {
+                statusEl.textContent = '❌ Still missing';
+                statusEl.style.color = '#f85149';
+                btn.disabled = false;
+            }
+        } catch (e) {
+            statusEl.textContent = '❌ Check failed';
+            statusEl.style.color = '#f85149';
+            btn.disabled = false;
+        }
+    }
+    
+    async function installSyncthing(btn) {
+        const statusEl = document.getElementById('syncthing-install-status');
+        btn.disabled = true;
+        btn.textContent = '⏳ Installing...';
+        statusEl.textContent = 'This may take a minute...';
+        statusEl.style.color = '#f0a030';
+        
+        try {
+            const res = await fetch('/dependencies/install-syncthing', { method: 'POST' });
+            const data = await res.json();
+            
+            if (data.success) {
+                statusEl.innerHTML = '✅ ' + data.message + ' <a href="http://localhost:8384" target="_blank" class="btn" style="margin-left:1rem;">🌐 Open Syncthing GUI</a>';
+                statusEl.style.color = '#7ee787';
+                btn.style.display = 'none';
+            } else {
+                statusEl.textContent = '❌ ' + (data.error || 'Installation failed');
+                statusEl.style.color = '#f85149';
+                btn.disabled = false;
+                btn.textContent = '📦 Install Syncthing';
+            }
+        } catch (e) {
+            statusEl.textContent = '❌ ' + e.message;
+            statusEl.style.color = '#f85149';
+            btn.disabled = false;
+            btn.textContent = '📦 Install Syncthing';
+        }
+    }
     </script>
 </body>
 </html>
