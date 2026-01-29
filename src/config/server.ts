@@ -20,9 +20,29 @@ import { discoverPlugins, loadPluginModule } from '../plugins';
 
 // Templates
 import { renderLayout } from './templates/layout';
-import { renderSystemSection, renderPluginsDivider } from './templates/system';
+import { renderSystemSection, renderPluginsDivider, TunnelRouteInfo } from './templates/system';
 import { renderGitHubSection } from './templates/github';
 import { renderFileBrowserSection } from './templates/filebrowser';
+import { renderDomainSection, TunnelPluginInfo } from './templates/domain';
+
+// Tunnel
+import {
+  getTunnelStatusAsync,
+  startTunnel,
+  stopTunnel,
+  checkCloudflared,
+  installCloudflared,
+  startTunnelWithToken,
+  saveTunnelConfig,
+  deleteTunnelConfig,
+} from '../tunnel/manager';
+import { saveCredentials, loadCredentials, loadTunnelConfig } from '../tunnel/config';
+import {
+  testCredentials,
+  setupTunnel,
+  teardownTunnel,
+} from '../tunnel/cloudflare-api';
+import { PROXY_PORT } from '../tunnel/proxy';
 
 const app = express();
 const PORT = 3456;
@@ -111,18 +131,47 @@ app.get('/', async (req, res) => {
   const playwrightInstalled = playwright.installed && playwright.browsers;
   const daemonRunning = await checkDaemonRunning();
   const syncthingInstalled = await checkSyncthing();
+  const tunnelStatus = await getTunnelStatusAsync();
 
   // Discover and render plugin sections
   const plugins = await discoverPlugins();
 
-  // Build core sections first: System, File Browser, GitHub
+  // Build tunnel routes info from plugins (for both system and domain sections)
+  const tunnelPlugins: TunnelPluginInfo[] = plugins
+    .filter(p => p.manifest.tunnel?.enabled)
+    .map(p => ({
+      pluginId: p.manifest.id,
+      pluginName: p.manifest.name,
+      pluginIcon: p.manifest.icon,
+      pathPrefix: p.manifest.tunnel!.pathPrefix,
+      port: p.manifest.tunnel!.port,
+      routeCount: p.manifest.tunnel!.routes.length,
+    }));
+
+  // Build core sections first: System, Your Domain, File Browser, GitHub
   const sections: string[] = [
     renderSystemSection(config, plugins, {
       playwrightInstalled: playwright.installed,
       browsersInstalled: playwright.browsers,
       daemonRunning,
       syncthingInstalled,
+      cloudflaredInstalled: tunnelStatus.cloudflaredInstalled,
+      tunnelRunning: tunnelStatus.tunnelRunning,
+      tunnelUrl: tunnelStatus.tunnelUrl,
+      tunnelRoutes: tunnelPlugins,
     }, savedSection === 'system' || savedSection === 'storage' || savedSection === 'daemon'),
+    renderDomainSection(
+      {
+        cloudflaredInstalled: tunnelStatus.cloudflaredInstalled,
+        credentialsConfigured: tunnelStatus.credentialsConfigured,
+        tunnelConfigured: tunnelStatus.tunnelConfigured,
+        tunnelRunning: tunnelStatus.tunnelRunning,
+        tunnelUrl: tunnelStatus.tunnelUrl,
+        tunnelConfig: tunnelStatus.tunnelConfig,
+      },
+      tunnelPlugins,
+      savedSection === 'domain'
+    ),
     renderFileBrowserSection(),
     renderGitHubSection(githubConfig, savedSection === 'github'),
   ];
@@ -635,6 +684,136 @@ app.post('/dependencies/install-syncthing', async (req, res) => {
       output: e.stdout || e.stderr || e.message
     });
   }
+});
+
+// ============ CLOUDFLARE TUNNEL ROUTES ============
+
+app.get('/dependencies/check-cloudflared', async (req, res) => {
+  const installed = await checkCloudflared();
+  res.json({ installed });
+});
+
+app.post('/dependencies/install-cloudflared', async (req, res) => {
+  console.log('🔧 Installing cloudflared...');
+  const result = await installCloudflared();
+  console.log(result.success ? '✅ cloudflared installed' : '❌ Failed to install cloudflared');
+  res.json(result);
+});
+
+app.get('/tunnel/status', async (req, res) => {
+  const status = await getTunnelStatusAsync();
+  res.json(status);
+});
+
+app.post('/tunnel/start', async (req, res) => {
+  console.log('☁️  Starting Cloudflare tunnel...');
+  const result = await startTunnel();
+  res.json(result);
+});
+
+app.post('/tunnel/stop', async (req, res) => {
+  console.log('☁️  Stopping Cloudflare tunnel...');
+  const result = await stopTunnel();
+  res.json(result);
+});
+
+// API-based tunnel routes
+app.post('/tunnel/test-credentials', async (req, res) => {
+  const { accountId, zoneId, apiToken } = req.body;
+  if (!accountId || !zoneId || !apiToken) {
+    res.json({ success: false, message: 'All credential fields are required' });
+    return;
+  }
+  console.log('☁️  Testing Cloudflare credentials...');
+  const result = await testCredentials({ accountId, zoneId, apiToken });
+  res.json(result);
+});
+
+app.post('/tunnel/save-credentials', async (req, res) => {
+  const { accountId, zoneId, apiToken } = req.body;
+  if (!accountId || !zoneId || !apiToken) {
+    res.json({ success: false, message: 'All credential fields are required' });
+    return;
+  }
+  
+  // Test credentials first
+  console.log('☁️  Verifying Cloudflare credentials...');
+  try {
+    const testResult = await testCredentials({ accountId, zoneId, apiToken });
+    console.log('☁️  Test result:', testResult);
+    
+    if (!testResult.success) {
+      res.json(testResult);
+      return;
+    }
+    
+    // Save credentials
+    console.log('☁️  Saving credentials...');
+    await saveCredentials({ accountId, zoneId, apiToken });
+    console.log('☁️  Credentials saved!');
+    res.json({ success: true, message: `Credentials saved! Connected to ${testResult.zoneName}` });
+  } catch (e: any) {
+    console.error('☁️  Error:', e);
+    res.json({ success: false, message: e.message });
+  }
+});
+
+app.post('/tunnel/setup', async (req, res) => {
+  const { name, subdomain } = req.body;
+  if (!name || !subdomain) {
+    res.json({ success: false, message: 'Tunnel name and subdomain are required' });
+    return;
+  }
+  
+  const credentials = await loadCredentials();
+  if (!credentials) {
+    res.json({ success: false, message: 'Cloudflare credentials not configured' });
+    return;
+  }
+  
+  console.log(`☁️  Setting up tunnel "${name}" with subdomain "${subdomain}"...`);
+  const result = await setupTunnel(credentials, name, subdomain, PROXY_PORT);
+  
+  if (result.success && result.tunnelId && result.tunnelToken && result.hostname) {
+    // Save the full tunnel config
+    await saveTunnelConfig({
+      credentials,
+      tunnelId: result.tunnelId,
+      tunnelName: name,
+      subdomain,
+      hostname: result.hostname,
+      tunnelToken: result.tunnelToken,
+      createdAt: new Date().toISOString(),
+    });
+  }
+  
+  res.json(result);
+});
+
+app.post('/tunnel/teardown', async (req, res) => {
+  const config = await loadTunnelConfig();
+  if (!config || !config.credentials) {
+    res.json({ success: false, message: 'No tunnel configured' });
+    return;
+  }
+  
+  // Stop the tunnel first
+  await stopTunnel();
+  
+  console.log('☁️  Tearing down tunnel...');
+  const result = await teardownTunnel(config.credentials, config.tunnelId, config.hostname);
+  
+  if (result.success) {
+    await deleteTunnelConfig();
+  }
+  
+  res.json(result);
+});
+
+app.post('/tunnel/start-token', async (req, res) => {
+  console.log('☁️  Starting tunnel with token...');
+  const result = await startTunnelWithToken();
+  res.json(result);
 });
 
 app.get('/status', (req, res) => {

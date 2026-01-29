@@ -63,7 +63,36 @@ export interface PluginManifest {
         playwright?: boolean;
         /** Requires user login/authentication */
         requiresLogin?: boolean;
+        /** Requires Chrome extension */
+        chromeExtension?: boolean;
     };
+
+    /** Tunnel configuration for exposing routes via Cloudflare Tunnel */
+    tunnel?: TunnelConfig;
+}
+
+/**
+ * Route exposed via tunnel
+ */
+export interface TunnelRoute {
+    /** Path relative to plugin's pathPrefix (e.g., "/api/push") */
+    path: string;
+    /** Auth requirement: false = no auth, "api-key" = requires X-API-Key header */
+    auth: false | 'api-key';
+}
+
+/**
+ * Tunnel configuration for a plugin
+ */
+export interface TunnelConfig {
+    /** Whether this plugin wants tunnel exposure */
+    enabled: boolean;
+    /** Port the plugin's server runs on */
+    port: number;
+    /** Path prefix for routing (e.g., "/chrome-history") */
+    pathPrefix: string;
+    /** Routes to expose (whitelist) */
+    routes: TunnelRoute[];
 }
 
 /**

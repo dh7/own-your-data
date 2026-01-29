@@ -5,11 +5,24 @@
 import { AppConfig, StorageConfig } from '../config';
 import { DiscoveredPlugin } from '../../plugins';
 
+export interface TunnelRouteInfo {
+    pluginId: string;
+    pluginName: string;
+    pluginIcon: string;
+    pathPrefix: string;
+    port: number;
+    routeCount: number;
+}
+
 export interface SystemStatus {
     playwrightInstalled: boolean;
     browsersInstalled: boolean;
     daemonRunning: boolean;
     syncthingInstalled: boolean;
+    cloudflaredInstalled: boolean;
+    tunnelRunning: boolean;
+    tunnelUrl: string | null;
+    tunnelRoutes: TunnelRouteInfo[];
 }
 
 export function renderSystemSection(
@@ -114,6 +127,28 @@ export function renderSystemSection(
                     </button>
                     <p id="syncthing-install-status" style="margin-top: 0.5rem; font-size: 0.85em; color: #8b949e;"></p>
                 </div>
+            `}
+        </div>
+
+        <!-- Cloudflare Tunnel (simplified - full config in Your Domain section) -->
+        <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #30363d;">
+            <h4 style="margin-bottom: 0.75rem; color: #79c0ff;">☁️ Cloudflare Tunnel</h4>
+            ${!status.cloudflaredInstalled ? `
+                <p style="color: #f0a030;">⚠️ cloudflared not installed</p>
+                <div style="margin-top: 1rem; padding: 1rem; background: #1a1a0a; border: 1px solid #4a4a2a; border-radius: 4px;">
+                    <button type="button" onclick="installCloudflared(this)" class="btn">
+                        📦 Install cloudflared
+                    </button>
+                    <p id="cloudflared-install-status" style="margin-top: 0.5rem; font-size: 0.85em; color: #8b949e;"></p>
+                </div>
+            ` : `
+                <p style="color: #7ee787;">✅ cloudflared installed</p>
+                ${status.tunnelRunning && status.tunnelUrl ? `
+                    <p style="color: #7ee787; margin-top: 0.5rem;">🌐 Tunnel running: <code>${status.tunnelUrl}</code></p>
+                ` : ''}
+                <p style="color: #8b949e; font-size: 0.9em; margin-top: 0.75rem;">
+                    Configure your permanent public URL in the <strong>Your Domain</strong> section below.
+                </p>
             `}
         </div>
 

@@ -21,5 +21,16 @@
         "playwright": false,
         "requiresLogin": false,
         "chromeExtension": true
+    },
+    "tunnel": {
+        "enabled": true,
+        "port": 3457,
+        "pathPrefix": "/chrome-history",
+        "routes": [
+            { "path": "/health", "auth": false },
+            { "path": "/ping", "auth": "api-key" },
+            { "path": "/api/chrome-history", "auth": "api-key" },
+            { "path": "/api/push", "auth": "api-key" }
+        ]
     }
 }

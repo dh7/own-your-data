@@ -370,6 +370,290 @@ export function renderLayout(sections: string[]): string {
             btn.textContent = '📦 Install Syncthing';
         }
     }
+    
+    async function installCloudflared(btn) {
+        const statusEl = document.getElementById('cloudflared-install-status');
+        btn.disabled = true;
+        btn.textContent = '⏳ Installing...';
+        statusEl.textContent = 'This may take a minute...';
+        statusEl.style.color = '#f0a030';
+        
+        try {
+            const res = await fetch('/dependencies/install-cloudflared', { method: 'POST' });
+            const data = await res.json();
+            
+            if (data.success) {
+                statusEl.innerHTML = '✅ ' + data.message + ' <a href="javascript:location.reload()">Refresh page</a>';
+                statusEl.style.color = '#7ee787';
+                btn.style.display = 'none';
+            } else {
+                statusEl.textContent = '❌ ' + (data.error || 'Installation failed');
+                statusEl.style.color = '#f85149';
+                btn.disabled = false;
+                btn.textContent = '📦 Install cloudflared';
+            }
+        } catch (e) {
+            statusEl.textContent = '❌ ' + e.message;
+            statusEl.style.color = '#f85149';
+            btn.disabled = false;
+            btn.textContent = '📦 Install cloudflared';
+        }
+    }
+    
+    async function startTunnel(btn) {
+        const statusEl = document.getElementById('tunnel-status');
+        btn.disabled = true;
+        btn.textContent = '⏳ Starting tunnel...';
+        statusEl.textContent = 'Starting proxy and cloudflared...';
+        statusEl.style.color = '#f0a030';
+        
+        try {
+            const res = await fetch('/tunnel/start', { method: 'POST' });
+            const data = await res.json();
+            
+            if (data.success) {
+                statusEl.innerHTML = '✅ Tunnel started! <a href="javascript:location.reload()">Refresh to see URL</a>';
+                statusEl.style.color = '#7ee787';
+            } else {
+                statusEl.textContent = '❌ ' + (data.message || 'Failed to start tunnel');
+                statusEl.style.color = '#f85149';
+                btn.disabled = false;
+                btn.textContent = '▶️ Start Tunnel';
+            }
+        } catch (e) {
+            statusEl.textContent = '❌ ' + e.message;
+            statusEl.style.color = '#f85149';
+            btn.disabled = false;
+            btn.textContent = '▶️ Start Tunnel';
+        }
+    }
+    
+    async function stopTunnel(btn) {
+        const statusEl = document.getElementById('tunnel-status');
+        btn.disabled = true;
+        btn.textContent = '⏳ Stopping...';
+        
+        try {
+            const res = await fetch('/tunnel/stop', { method: 'POST' });
+            const data = await res.json();
+            
+            if (data.success) {
+                statusEl.innerHTML = '✅ Tunnel stopped. <a href="javascript:location.reload()">Refresh page</a>';
+                statusEl.style.color = '#7ee787';
+            } else {
+                statusEl.textContent = '❌ ' + (data.message || 'Failed to stop tunnel');
+                statusEl.style.color = '#f85149';
+                btn.disabled = false;
+                btn.textContent = '⏹️ Stop Tunnel';
+            }
+        } catch (e) {
+            statusEl.textContent = '❌ ' + e.message;
+            statusEl.style.color = '#f85149';
+            btn.disabled = false;
+            btn.textContent = '⏹️ Stop Tunnel';
+        }
+    }
+    
+    function copyTunnelUrl(url) {
+        navigator.clipboard.writeText(url).then(() => {
+            const btn = event.target;
+            const originalText = btn.textContent;
+            btn.textContent = '✅ Copied!';
+            setTimeout(() => btn.textContent = originalText, 2000);
+        });
+    }
+    
+    // API-based tunnel functions for Your Domain section
+    async function testCloudflareCredentials(btn) {
+        const statusEl = document.getElementById('cf-credentials-status');
+        const accountId = document.getElementById('cf-account-id').value.trim();
+        const zoneId = document.getElementById('cf-zone-id').value.trim();
+        const apiToken = document.getElementById('cf-api-token').value.trim();
+        
+        if (!accountId || !zoneId || !apiToken) {
+            statusEl.textContent = '❌ Please fill in all credential fields';
+            statusEl.style.color = '#f85149';
+            return;
+        }
+        
+        btn.disabled = true;
+        btn.textContent = '⏳ Testing...';
+        statusEl.textContent = 'Connecting to Cloudflare API...';
+        statusEl.style.color = '#f0a030';
+        
+        try {
+            const res = await fetch('/tunnel/test-credentials', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ accountId, zoneId, apiToken })
+            });
+            const data = await res.json();
+            
+            if (data.success) {
+                statusEl.textContent = '✅ ' + data.message;
+                statusEl.style.color = '#7ee787';
+            } else {
+                statusEl.textContent = '❌ ' + (data.message || 'Connection failed');
+                statusEl.style.color = '#f85149';
+            }
+        } catch (e) {
+            statusEl.textContent = '❌ ' + e.message;
+            statusEl.style.color = '#f85149';
+        }
+        btn.disabled = false;
+        btn.textContent = '🔍 Test Connection';
+    }
+    
+    async function saveCloudflareCredentials(btn) {
+        const statusEl = document.getElementById('cf-credentials-status');
+        const accountId = document.getElementById('cf-account-id').value.trim();
+        const zoneId = document.getElementById('cf-zone-id').value.trim();
+        const apiToken = document.getElementById('cf-api-token').value.trim();
+        
+        if (!accountId || !zoneId || !apiToken) {
+            statusEl.textContent = '❌ Please fill in all credential fields';
+            statusEl.style.color = '#f85149';
+            return;
+        }
+        
+        btn.disabled = true;
+        btn.textContent = '⏳ Saving...';
+        statusEl.textContent = 'Verifying and saving credentials...';
+        statusEl.style.color = '#f0a030';
+        
+        try {
+            const res = await fetch('/tunnel/save-credentials', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ accountId, zoneId, apiToken })
+            });
+            const data = await res.json();
+            
+            if (data.success) {
+                statusEl.innerHTML = '✅ ' + data.message + '<br/><a href="javascript:location.reload()" class="btn small-btn" style="margin-top: 0.5rem; display: inline-block;">🔄 Reload to continue</a>';
+                statusEl.style.color = '#7ee787';
+            } else {
+                statusEl.textContent = '❌ ' + (data.message || 'Failed to save credentials');
+                statusEl.style.color = '#f85149';
+                btn.disabled = false;
+                btn.textContent = '💾 Save Credentials';
+            }
+        } catch (e) {
+            statusEl.textContent = '❌ ' + e.message;
+            statusEl.style.color = '#f85149';
+            btn.disabled = false;
+            btn.textContent = '💾 Save Credentials';
+        }
+    }
+    
+    async function createTunnelViaApi(btn) {
+        const statusEl = document.getElementById('tunnel-create-status');
+        const nameInput = document.getElementById('tunnel-name');
+        const subdomainInput = document.getElementById('tunnel-subdomain');
+        
+        const name = nameInput.value.trim();
+        const subdomain = subdomainInput.value.trim();
+        
+        if (!name) {
+            statusEl.textContent = '❌ Please enter a tunnel name';
+            statusEl.style.color = '#f85149';
+            return;
+        }
+        if (!subdomain) {
+            statusEl.textContent = '❌ Please enter a subdomain';
+            statusEl.style.color = '#f85149';
+            return;
+        }
+        
+        btn.disabled = true;
+        btn.textContent = '⏳ Creating tunnel...';
+        statusEl.textContent = 'Creating tunnel via Cloudflare API (this may take a moment)...';
+        statusEl.style.color = '#f0a030';
+        
+        try {
+            const res = await fetch('/tunnel/setup', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, subdomain })
+            });
+            const data = await res.json();
+            
+            if (data.success) {
+                statusEl.innerHTML = '✅ ' + data.message + '<br/><a href="javascript:location.reload()" class="btn small-btn" style="margin-top: 0.5rem; display: inline-block;">🔄 Reload to continue</a>';
+                statusEl.style.color = '#7ee787';
+            } else {
+                statusEl.textContent = '❌ ' + (data.message || 'Failed to create tunnel');
+                statusEl.style.color = '#f85149';
+                btn.disabled = false;
+                btn.textContent = '🚀 Create Tunnel';
+            }
+        } catch (e) {
+            statusEl.textContent = '❌ ' + e.message;
+            statusEl.style.color = '#f85149';
+            btn.disabled = false;
+            btn.textContent = '🚀 Create Tunnel';
+        }
+    }
+    
+    async function startTunnelWithToken(btn) {
+        const statusEl = document.getElementById('tunnel-action-status');
+        btn.disabled = true;
+        btn.textContent = '⏳ Starting...';
+        statusEl.textContent = 'Starting tunnel...';
+        statusEl.style.color = '#f0a030';
+        
+        try {
+            const res = await fetch('/tunnel/start-token', { method: 'POST' });
+            const data = await res.json();
+            
+            if (data.success) {
+                statusEl.innerHTML = '✅ Tunnel started!<br/><a href="javascript:location.reload()" class="btn small-btn" style="margin-top: 0.5rem; display: inline-block;">🔄 Reload to see status</a>';
+                statusEl.style.color = '#7ee787';
+            } else {
+                statusEl.textContent = '❌ ' + (data.message || 'Failed to start tunnel');
+                statusEl.style.color = '#f85149';
+                btn.disabled = false;
+                btn.textContent = '▶️ Start Tunnel';
+            }
+        } catch (e) {
+            statusEl.textContent = '❌ ' + e.message;
+            statusEl.style.color = '#f85149';
+            btn.disabled = false;
+            btn.textContent = '▶️ Start Tunnel';
+        }
+    }
+    
+    async function deleteTunnelViaApi(btn) {
+        if (!confirm('Are you sure you want to delete this tunnel? This will remove it from Cloudflare and cannot be undone.')) {
+            return;
+        }
+        
+        const statusEl = document.getElementById('tunnel-action-status');
+        btn.disabled = true;
+        btn.textContent = '⏳ Deleting...';
+        statusEl.textContent = 'Deleting tunnel via Cloudflare API...';
+        statusEl.style.color = '#f0a030';
+        
+        try {
+            const res = await fetch('/tunnel/teardown', { method: 'POST' });
+            const data = await res.json();
+            
+            if (data.success) {
+                statusEl.innerHTML = '✅ Tunnel deleted.<br/><a href="javascript:location.reload()" class="btn small-btn" style="margin-top: 0.5rem; display: inline-block;">🔄 Reload page</a>';
+                statusEl.style.color = '#7ee787';
+            } else {
+                statusEl.textContent = '❌ ' + (data.message || 'Failed to delete tunnel');
+                statusEl.style.color = '#f85149';
+                btn.disabled = false;
+                btn.textContent = '🗑️ Delete Tunnel';
+            }
+        } catch (e) {
+            statusEl.textContent = '❌ ' + e.message;
+            statusEl.style.color = '#f85149';
+            btn.disabled = false;
+            btn.textContent = '🗑️ Delete Tunnel';
+        }
+    }
     </script>
 </body>
 </html>
