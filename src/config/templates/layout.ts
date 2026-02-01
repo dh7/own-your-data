@@ -637,6 +637,40 @@ export function renderLayout(sections: string[]): string {
         }
     }
     
+    async function configureSyncthingRemote(btn) {
+        const statusEl = document.getElementById('syncthing-config-status');
+        btn.disabled = true;
+        const originalText = btn.textContent;
+        btn.textContent = '⏳ Configuring...';
+        statusEl.textContent = 'Updating Syncthing config...';
+        statusEl.style.color = '#f0a030';
+        
+        try {
+            const res = await fetch('/dependencies/configure-syncthing-remote', { method: 'POST' });
+            const data = await res.json();
+            
+            if (data.success) {
+                if (data.alreadyConfigured) {
+                    statusEl.textContent = '✅ ' + data.message;
+                } else {
+                    statusEl.innerHTML = '✅ ' + data.message + '<br/>⚠️ <strong>Important:</strong> Set a password in Syncthing GUI → Actions → Settings → GUI';
+                }
+                statusEl.style.color = '#7ee787';
+                btn.textContent = '✅ Remote Access Enabled';
+            } else {
+                statusEl.textContent = '❌ ' + (data.error || 'Configuration failed');
+                statusEl.style.color = '#f85149';
+                btn.disabled = false;
+                btn.textContent = originalText;
+            }
+        } catch (e) {
+            statusEl.textContent = '❌ ' + e.message;
+            statusEl.style.color = '#f85149';
+            btn.disabled = false;
+            btn.textContent = originalText;
+        }
+    }
+    
     async function installCloudflared(btn) {
         const statusEl = document.getElementById('cloudflared-install-status');
         btn.disabled = true;

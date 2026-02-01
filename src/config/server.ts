@@ -782,6 +782,108 @@ app.post('/dependencies/install-syncthing', async (req, res) => {
   }
 });
 
+// Configure Syncthing for remote access
+app.post('/dependencies/configure-syncthing-remote', async (req, res) => {
+  console.log('🔧 Configuring Syncthing for remote access...');
+
+  try {
+    const { promisify } = await import('util');
+    const execAsync = promisify(exec);
+    const os = await import('os');
+
+    // Find Syncthing config file
+    const platform = process.platform;
+    let configPath: string;
+
+    if (platform === 'darwin') {
+      configPath = path.join(os.homedir(), 'Library/Application Support/Syncthing/config.xml');
+    } else if (platform === 'linux') {
+      configPath = path.join(os.homedir(), '.config/syncthing/config.xml');
+    } else {
+      res.json({ success: false, error: 'Unsupported platform: ' + platform });
+      return;
+    }
+
+    // Check if config exists
+    try {
+      await fs.access(configPath);
+    } catch {
+      res.json({
+        success: false,
+        error: 'Syncthing config not found. Please run Syncthing at least once first.'
+      });
+      return;
+    }
+
+    // Read config
+    let configContent = await fs.readFile(configPath, 'utf-8');
+
+    // Check if already configured for remote access
+    if (configContent.includes('<address>0.0.0.0:8384</address>')) {
+      res.json({
+        success: true,
+        message: 'Syncthing is already configured for remote access!',
+        alreadyConfigured: true
+      });
+      return;
+    }
+
+    // Replace 127.0.0.1 with 0.0.0.0
+    const originalContent = configContent;
+    configContent = configContent.replace(
+      /<address>127\.0\.0\.1:8384<\/address>/g,
+      '<address>0.0.0.0:8384</address>'
+    );
+
+    if (configContent === originalContent) {
+      res.json({
+        success: false,
+        error: 'Could not find GUI address to update in config. Config format may have changed.'
+      });
+      return;
+    }
+
+    // Backup original config
+    await fs.writeFile(configPath + '.backup', originalContent);
+
+    // Write new config
+    await fs.writeFile(configPath, configContent);
+
+    // Try to restart Syncthing
+    let restartMessage = '';
+    try {
+      // Kill existing syncthing process
+      await execAsync('pkill syncthing || true', { timeout: 5000 });
+
+      // Wait a moment
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      // Start syncthing in background
+      if (platform === 'linux') {
+        await execAsync('nohup syncthing > /dev/null 2>&1 &', { timeout: 5000 });
+      } else {
+        await execAsync('syncthing &', { timeout: 5000 });
+      }
+      restartMessage = ' Syncthing restarted.';
+    } catch (e) {
+      restartMessage = ' Please restart Syncthing manually.';
+    }
+
+    console.log('✅ Syncthing configured for remote access');
+    res.json({
+      success: true,
+      message: 'Syncthing configured for remote access!' + restartMessage + ' GUI now accessible on 0.0.0.0:8384'
+    });
+
+  } catch (e: any) {
+    console.error('❌ Failed to configure Syncthing:', e.message);
+    res.json({
+      success: false,
+      error: e.message
+    });
+  }
+});
+
 // ============ UPDATES & RESTART ROUTES ============
 
 app.get('/system/check-updates', async (req, res) => {
