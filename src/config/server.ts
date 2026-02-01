@@ -137,29 +137,54 @@ interface GitUpdateStatus {
   commitsBehind: number;
 }
 
-async function checkForGitUpdates(): Promise<GitUpdateStatus> {
+async function checkForGitUpdates(skipFetch: boolean = false): Promise<GitUpdateStatus> {
   const { promisify } = await import('util');
   const execAsync = promisify(exec);
 
   try {
-    // Fetch latest from origin (silently)
-    await execAsync('git fetch origin main', { cwd: process.cwd() });
-
-    // Get current commit
+    // Get current commit first (this always works locally)
     const { stdout: currentCommit } = await execAsync('git rev-parse HEAD', { cwd: process.cwd() });
 
-    // Get remote commit
-    const { stdout: remoteCommit } = await execAsync('git rev-parse origin/main', { cwd: process.cwd() });
+    if (!skipFetch) {
+      // Fetch latest from origin with:
+      // - Batch mode SSH (no passphrase prompt)
+      // - Short timeout (5 seconds)
+      // - Quiet mode
+      try {
+        await execAsync('git fetch origin main --quiet', {
+          cwd: process.cwd(),
+          timeout: 5000, // 5 second timeout
+          env: {
+            ...process.env,
+            GIT_SSH_COMMAND: 'ssh -o BatchMode=yes -o StrictHostKeyChecking=no',
+            GIT_TERMINAL_PROMPT: '0', // Disable git credential prompts
+          }
+        });
+      } catch (fetchError) {
+        // Fetch failed (likely SSH auth issue), but we can still compare with cached origin/main
+        console.log('⚠️ Git fetch skipped (auth required or timeout)');
+      }
+    }
 
-    // Count commits behind
-    const { stdout: behindCount } = await execAsync('git rev-list HEAD..origin/main --count', { cwd: process.cwd() });
+    // Get remote commit (uses cached value if fetch failed)
+    let remoteCommit = currentCommit.trim(); // Default to same as current
+    let commitsBehind = 0;
 
-    const commitsBehind = parseInt(behindCount.trim()) || 0;
+    try {
+      const { stdout: remote } = await execAsync('git rev-parse origin/main', { cwd: process.cwd() });
+      remoteCommit = remote.trim();
+
+      // Count commits behind
+      const { stdout: behindCount } = await execAsync('git rev-list HEAD..origin/main --count', { cwd: process.cwd() });
+      commitsBehind = parseInt(behindCount.trim()) || 0;
+    } catch {
+      // origin/main might not exist yet, that's ok
+    }
 
     return {
       updateAvailable: commitsBehind > 0,
       currentCommit: currentCommit.trim(),
-      remoteCommit: remoteCommit.trim(),
+      remoteCommit,
       commitsBehind,
     };
   } catch (e) {
@@ -188,7 +213,8 @@ app.get('/', async (req, res) => {
   const syncthingInstalled = await checkSyncthing();
   const tunnelStatus = await getTunnelStatusAsync();
   const whisperXInstalled = await checkWhisperX();
-  const gitStatus = await checkForGitUpdates();
+  // Skip fetch on initial load to avoid SSH passphrase prompts - user can click "Check for Updates"
+  const gitStatus = await checkForGitUpdates(true);
 
   // Discover and render plugin sections
   const plugins = await discoverPlugins();
@@ -764,16 +790,26 @@ app.post('/system/pull-updates', async (req, res) => {
     const execAsync = promisify(exec);
 
     // First stash any local changes
+    console.log('📦 Stashing local changes...');
     await execAsync('git stash', { cwd: process.cwd() });
 
     // Pull latest changes
-    const { stdout, stderr } = await execAsync('git pull origin main', { cwd: process.cwd() });
+    console.log('⬇️ Pulling from origin/main...');
+    const { stdout: pullOutput, stderr: pullStderr } = await execAsync('git pull origin main', { cwd: process.cwd() });
 
-    console.log('✅ Updates pulled successfully');
+    // Run npm install to get any new dependencies
+    console.log('📦 Installing dependencies...');
+    const { stdout: npmOutput, stderr: npmStderr } = await execAsync('npm install', {
+      cwd: process.cwd(),
+      timeout: 120000, // 2 minute timeout for npm install
+      maxBuffer: 10 * 1024 * 1024,
+    });
+
+    console.log('✅ Updates pulled and dependencies installed');
     res.json({
       success: true,
-      message: 'Updates pulled successfully! Restart the server to apply changes.',
-      output: stdout + (stderr ? '\n' + stderr : '')
+      message: 'Updates pulled and dependencies installed! Restart the server to apply changes.',
+      output: pullOutput + (pullStderr ? '\n' + pullStderr : '') + '\n--- npm install ---\n' + npmOutput
     });
   } catch (e: any) {
     console.error('❌ Failed to pull updates:', e.message);

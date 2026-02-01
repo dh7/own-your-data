@@ -347,7 +347,7 @@ export function renderLayout(sections: string[]): string {
     async function pullUpdates(btn) {
         const statusEl = document.getElementById('update-status');
         btn.disabled = true;
-        statusEl.textContent = 'Pulling updates...';
+        statusEl.textContent = 'Pulling updates & installing dependencies (may take a minute)...';
         statusEl.style.color = '#f0a030';
         
         try {
