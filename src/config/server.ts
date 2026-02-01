@@ -478,6 +478,119 @@ app.get('/zip', async (req, res) => {
   }
 });
 
+// Pre-configured Chrome extension download
+// Creates a zip with API key and server URL already configured
+app.get('/chrome-extension-configured', async (req, res) => {
+  try {
+    const basePath = process.cwd();
+    const extensionSrc = path.join(basePath, 'src', 'plugins', 'chrome-history', 'extension');
+    const tempDir = path.join(basePath, 'logs', 'chrome-ext-temp');
+    const zipPath = path.join(basePath, 'logs', 'chrome-extension-configured.zip');
+    
+    // Get API key
+    const apiKeyPath = path.join(basePath, 'auth', 'chrome-api-key.txt');
+    let apiKey = '';
+    try {
+      apiKey = (await fs.readFile(apiKeyPath, 'utf8')).trim();
+    } catch {
+      // Generate one if missing
+      const crypto = await import('crypto');
+      apiKey = crypto.randomBytes(32).toString('hex');
+      await fs.mkdir(path.dirname(apiKeyPath), { recursive: true });
+      await fs.writeFile(apiKeyPath, apiKey);
+    }
+    
+    // Get tunnel URL if configured
+    const tunnelConfigPath = path.join(basePath, 'auth', 'cloudflare-tunnel.json');
+    let serverUrl = 'http://localhost:3457/api/chrome-history'; // default
+    try {
+      const tunnelConfig = JSON.parse(await fs.readFile(tunnelConfigPath, 'utf8'));
+      if (tunnelConfig.hostname) {
+        serverUrl = `https://${tunnelConfig.hostname}/chrome-history/api/chrome-history`;
+      }
+    } catch { }
+    
+    // Clean up temp dir
+    try {
+      await fs.rm(tempDir, { recursive: true });
+    } catch { }
+    await fs.mkdir(tempDir, { recursive: true });
+    
+    // Copy extension files
+    const { promisify } = await import('util');
+    const execAsync = promisify(exec);
+    await execAsync(`cp -r "${extensionSrc}"/* "${tempDir}"/`);
+    
+    // Create a settings.json file with pre-configured values
+    const settingsContent = JSON.stringify({
+      apiKey: apiKey,
+      serverUrl: serverUrl
+    }, null, 2);
+    await fs.writeFile(path.join(tempDir, 'settings.json'), settingsContent);
+    
+    // Modify background.js to load settings.json on install
+    const bgPath = path.join(tempDir, 'background.js');
+    const bgContent = await fs.readFile(bgPath, 'utf8');
+    
+    // Add code to auto-load settings on install
+    const autoConfigCode = `
+// Auto-configure from settings.json on first install
+chrome.runtime.onInstalled.addListener(async (details) => {
+  if (details.reason === 'install') {
+    try {
+      const response = await fetch(chrome.runtime.getURL('settings.json'));
+      const preConfig = await response.json();
+      
+      if (preConfig.apiKey && preConfig.serverUrl) {
+        const { settings } = await chrome.storage.local.get('settings');
+        const newSettings = {
+          ...(settings || {}),
+          apiKey: preConfig.apiKey,
+          serverUrl: preConfig.serverUrl
+        };
+        await chrome.storage.local.set({ settings: newSettings });
+        console.log('🎉 Extension pre-configured with API key and server URL!');
+      }
+    } catch (e) {
+      console.log('No pre-config found, using defaults');
+    }
+  }
+});
+
+`;
+    
+    // Prepend the auto-config code
+    await fs.writeFile(bgPath, autoConfigCode + bgContent);
+    
+    // Update manifest to include settings.json in web_accessible_resources
+    const manifestPath = path.join(tempDir, 'manifest.json');
+    const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8'));
+    manifest.web_accessible_resources = manifest.web_accessible_resources || [];
+    manifest.web_accessible_resources.push({
+      resources: ['settings.json'],
+      matches: ['<all_urls>']
+    });
+    await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2));
+    
+    // Create zip
+    try {
+      await fs.unlink(zipPath);
+    } catch { }
+    await execAsync(`cd "${tempDir}" && zip -r "${zipPath}" .`);
+    
+    console.log(`📦 Created pre-configured extension: chrome-extension-configured.zip`);
+    console.log(`   Server URL: ${serverUrl}`);
+    
+    // Clean up temp
+    await fs.rm(tempDir, { recursive: true });
+    
+    res.download(zipPath, 'chrome-extension-configured.zip');
+  } catch (e: any) {
+    console.error('Failed to create configured extension:', e);
+    res.status(500).send(`Failed to create extension: ${e.message}`);
+  }
+});
+
 // ============ FILE BROWSER ROUTES ============
 
 // List files in directory

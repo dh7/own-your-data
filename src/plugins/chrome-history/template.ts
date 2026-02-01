@@ -10,6 +10,28 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
 
+// Path to tunnel config
+const TUNNEL_CONFIG_PATH = path.join(process.cwd(), 'auth', 'cloudflare-tunnel.json');
+
+interface TunnelConfig {
+    hostname?: string;
+}
+
+/**
+ * Get the tunnel URL if configured
+ */
+function getTunnelUrl(): string | null {
+    try {
+        if (fs.existsSync(TUNNEL_CONFIG_PATH)) {
+            const config: TunnelConfig = JSON.parse(fs.readFileSync(TUNNEL_CONFIG_PATH, 'utf8'));
+            if (config.hostname) {
+                return `https://${config.hostname}`;
+            }
+        }
+    } catch { }
+    return null;
+}
+
 /**
  * Generate or load API key
  */
@@ -87,6 +109,11 @@ export function renderTemplate(
     // Check extension folder exists
     const extensionPath = path.join(__dirname, 'extension');
     const extensionExists = fs.existsSync(path.join(extensionPath, 'manifest.json'));
+
+    // Get tunnel URL if configured
+    const tunnelUrl = getTunnelUrl();
+    const localServerUrl = `http://localhost:${serverPort}/api/chrome-history`;
+    const tunnelServerUrl = tunnelUrl ? `${tunnelUrl}/chrome-history/api/chrome-history` : null;
 
     // Determine status
     let statusClass = 'pending';
@@ -189,33 +216,89 @@ export function renderTemplate(
             <button type="submit">💾 Save Chrome History Config</button>
         </form>
 
+        <!-- Server URL Configuration -->
+        <div style="margin-top: 1.5rem; padding: 1rem; background: #0d1117; border: 1px solid #30363d; border-radius: 6px;">
+            <h4 style="margin-bottom: 0.75rem; color: #79c0ff;">🔗 Server URL for Extension</h4>
+            
+            ${tunnelServerUrl ? `
+            <div style="margin-bottom: 1rem; padding: 0.75rem; background: #0a1a0a; border: 1px solid #2a4a2a; border-radius: 4px;">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+                    <span style="color: #7ee787; font-weight: 600;">🌐 Remote Access (via Tunnel)</span>
+                    <button type="button" id="testTunnelBtn" onclick="testTunnel()" style="background: #238636; border: none; cursor: pointer; color: white; padding: 4px 10px; border-radius: 4px; font-size: 0.8em;">🔍 Test</button>
+                </div>
+                <p style="color: #8b949e; font-size: 0.85em; margin-bottom: 0.5rem;">Use this URL when accessing from anywhere (other devices, laptops):</p>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <code id="tunnel-url" style="flex: 1; background: #161b22; padding: 8px 12px; border-radius: 4px; font-size: 0.75rem; word-break: break-all; border: 1px solid #30363d;">${tunnelServerUrl}</code>
+                    <button type="button" onclick="copyTunnelUrl()" style="background: #238636; border: none; cursor: pointer; color: white; padding: 8px 12px; border-radius: 4px; font-size: 0.85rem; white-space: nowrap;">📋 Copy</button>
+                </div>
+                <p id="tunnel-test-result" style="margin-top: 0.5rem; font-size: 0.85em;"></p>
+            </div>
+            ` : `
+            <div style="margin-bottom: 1rem; padding: 0.75rem; background: #1a1a0a; border: 1px solid #4a4a2a; border-radius: 4px;">
+                <span style="color: #f0a030;">⚠️ No tunnel configured</span>
+                <p style="color: #8b949e; font-size: 0.85em; margin-top: 0.5rem;">
+                    Configure a tunnel in the <strong>Your Domain</strong> section for remote access.
+                </p>
+            </div>
+            `}
+
+            <div style="padding: 0.75rem; background: #0a0a1a; border: 1px solid #2a2a4a; border-radius: 4px;">
+                <span style="color: #79c0ff; font-weight: 600;">🏠 Local Access</span>
+                <p style="color: #8b949e; font-size: 0.85em; margin: 0.5rem 0;">Use this URL when the extension and server are on the same machine:</p>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <code id="local-url" style="flex: 1; background: #161b22; padding: 8px 12px; border-radius: 4px; font-size: 0.75rem; word-break: break-all; border: 1px solid #30363d;">${localServerUrl}</code>
+                    <button type="button" onclick="copyLocalUrl()" style="background: #238636; border: none; cursor: pointer; color: white; padding: 8px 12px; border-radius: 4px; font-size: 0.85rem; white-space: nowrap;">📋 Copy</button>
+                </div>
+            </div>
+        </div>
+
         <!-- Instructions -->
         <details style="margin-top: 1.5rem; background: #0d1117; padding: 0.75rem; border-radius: 6px; border: 1px solid #30363d;" open>
             <summary style="cursor: pointer; color: #58a6ff; font-weight: 600;">📖 Setup Instructions</summary>
-            <ol style="margin-top: 1rem; margin-left: 1.5rem; color: #c9d1d9; line-height: 2;">
-                <li>
-                    <a href="/zip?folder=src/plugins/chrome-history/extension&name=chrome-extension" style="color: #58a6ff; font-weight: 500;">⬇️ Download the extension .zip</a>
-                </li>
-                <li>Unzip the downloaded file</li>
-                <li>
-                    Open Chrome → 
-                    <code style="background: #161b22; padding: 2px 6px; border-radius: 3px;">chrome://extensions/</code>
-                    <button type="button" id="copyUrlBtn" onclick="copyUrl()" style="background: #238636; border: none; cursor: pointer; color: white; padding: 4px 10px; border-radius: 4px; margin-left: 4px; font-size: 0.85em;" title="Copy URL">📋 Copy</button>
-                    <small style="color: #8b949e; margin-left: 4px;">(paste in Chrome)</small>
-                </li>
-                <li>Enable <strong style="color: #f0f6fc;">Developer mode</strong> (top right toggle)</li>
-                <li>Click <strong style="color: #f0f6fc;">Load unpacked</strong> → select the unzipped folder</li>
-                <li>
-                    <strong style="color: #f0f6fc;">Copy the API key:</strong>
-                    <div style="margin-top: 0.5rem; display: flex; align-items: center; gap: 8px;">
-                        <code id="chrome-api-key" style="flex: 1; background: #161b22; padding: 8px 12px; border-radius: 4px; font-size: 0.75rem; word-break: break-all; border: 1px solid #30363d;">${apiKey}</code>
-                        <button type="button" id="copyApiKeyBtn" onclick="copyApiKey()" style="background: #238636; border: none; cursor: pointer; color: white; padding: 8px 12px; border-radius: 4px; font-size: 0.85rem; white-space: nowrap;" title="Copy API key">📋 Copy</button>
-                    </div>
-                </li>
-                <li>Open extension popup → ⚙️ <strong style="color: #f0f6fc;">Settings</strong> → Paste API key <small style="color: #7ee787;">(auto-saves)</small></li>
-                <li>Start the server: <code style="background: #161b22; padding: 2px 6px; border-radius: 3px;">npm run chrome:server</code></li>
-                <li>Browse normally - URLs sync to GitHub automatically! 🎉</li>
-            </ol>
+            
+            <!-- Quick Setup (pre-configured) -->
+            ${tunnelServerUrl ? `
+            <div style="margin-top: 1rem; padding: 1rem; background: #0a1a0a; border: 1px solid #2a4a2a; border-radius: 6px;">
+                <h5 style="color: #7ee787; margin-bottom: 0.75rem;">⚡ Quick Setup (Pre-configured)</h5>
+                <ol style="margin-left: 1.5rem; color: #c9d1d9; line-height: 1.8;">
+                    <li>
+                        <a href="/chrome-extension-configured" style="color: #58a6ff; font-weight: 500;">⬇️ Download pre-configured extension</a>
+                        <small style="color: #7ee787; margin-left: 0.5rem;">(API key + tunnel URL included!)</small>
+                    </li>
+                    <li>Unzip and load in Chrome (see manual steps below)</li>
+                    <li>Done! Extension is ready to use 🎉</li>
+                </ol>
+            </div>
+            ` : ''}
+            
+            <!-- Manual Setup -->
+            <div style="margin-top: 1rem;">
+                <h5 style="color: #8b949e; margin-bottom: 0.75rem;">${tunnelServerUrl ? '📝 Manual Setup (or customize settings)' : '📝 Setup Steps'}</h5>
+                <ol style="margin-left: 1.5rem; color: #c9d1d9; line-height: 2;">
+                    <li>
+                        <a href="/zip?folder=src/plugins/chrome-history/extension&name=chrome-extension" style="color: #58a6ff; font-weight: 500;">⬇️ Download the extension .zip</a>
+                    </li>
+                    <li>Unzip the downloaded file</li>
+                    <li>
+                        Open Chrome → 
+                        <code style="background: #161b22; padding: 2px 6px; border-radius: 3px;">chrome://extensions/</code>
+                        <button type="button" id="copyUrlBtn" onclick="copyUrl()" style="background: #238636; border: none; cursor: pointer; color: white; padding: 4px 10px; border-radius: 4px; margin-left: 4px; font-size: 0.85em;" title="Copy URL">📋 Copy</button>
+                        <small style="color: #8b949e; margin-left: 4px;">(paste in Chrome)</small>
+                    </li>
+                    <li>Enable <strong style="color: #f0f6fc;">Developer mode</strong> (top right toggle)</li>
+                    <li>Click <strong style="color: #f0f6fc;">Load unpacked</strong> → select the unzipped folder</li>
+                    <li>
+                        <strong style="color: #f0f6fc;">Copy the API key:</strong>
+                        <div style="margin-top: 0.5rem; display: flex; align-items: center; gap: 8px;">
+                            <code id="chrome-api-key" style="flex: 1; background: #161b22; padding: 8px 12px; border-radius: 4px; font-size: 0.75rem; word-break: break-all; border: 1px solid #30363d;">${apiKey}</code>
+                            <button type="button" id="copyApiKeyBtn" onclick="copyApiKey()" style="background: #238636; border: none; cursor: pointer; color: white; padding: 8px 12px; border-radius: 4px; font-size: 0.85rem; white-space: nowrap;" title="Copy API key">📋 Copy</button>
+                        </div>
+                    </li>
+                    <li>Open extension popup → ⚙️ <strong style="color: #f0f6fc;">Settings</strong> → Paste API key and Server URL</li>
+                    <li>Start the server: <code style="background: #161b22; padding: 2px 6px; border-radius: 3px;">npm run chrome:server</code></li>
+                    <li>Browse normally - URLs sync to GitHub automatically! 🎉</li>
+                </ol>
+            </div>
         </details>
 
         <hr style="margin: 1.5rem 0; border: none; border-top: 1px solid #30363d;" />
@@ -258,6 +341,64 @@ function copyApiKey() {
             btn.style.background = '#238636';
         }, 2000);
     });
+}
+
+function copyTunnelUrl() {
+    const urlEl = document.getElementById('tunnel-url');
+    navigator.clipboard.writeText(urlEl.innerText).then(() => {
+        showCopied(event.target);
+    });
+}
+
+function copyLocalUrl() {
+    const urlEl = document.getElementById('local-url');
+    navigator.clipboard.writeText(urlEl.innerText).then(() => {
+        showCopied(event.target);
+    });
+}
+
+function showCopied(btn) {
+    const original = btn.innerHTML;
+    btn.innerHTML = '✓ Copied!';
+    btn.style.background = '#1a7f37';
+    setTimeout(() => {
+        btn.innerHTML = original;
+        btn.style.background = '#238636';
+    }, 2000);
+}
+
+async function testTunnel() {
+    const btn = document.getElementById('testTunnelBtn');
+    const result = document.getElementById('tunnel-test-result');
+    const tunnelUrl = document.getElementById('tunnel-url').innerText;
+    const apiKey = document.getElementById('chrome-api-key').innerText;
+    
+    btn.disabled = true;
+    btn.innerHTML = '⏳ Testing...';
+    result.innerHTML = '';
+    
+    try {
+        // Test the /ping endpoint which requires auth
+        const pingUrl = tunnelUrl.replace('/api/chrome-history', '/ping');
+        const response = await fetch(pingUrl, {
+            method: 'GET',
+            headers: { 'X-API-Key': apiKey }
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            result.innerHTML = '<span style="color: #7ee787;">✅ Tunnel working! Connection successful.</span>';
+        } else if (response.status === 401) {
+            result.innerHTML = '<span style="color: #f0a030;">⚠️ Tunnel reachable but API key mismatch. Make sure the server is using the same key.</span>';
+        } else {
+            result.innerHTML = '<span style="color: #ff7b72;">❌ Tunnel error: ' + response.status + '</span>';
+        }
+    } catch (e) {
+        result.innerHTML = '<span style="color: #ff7b72;">❌ Cannot reach tunnel. Is the server running? (npm run chrome:server)</span>';
+    }
+    
+    btn.disabled = false;
+    btn.innerHTML = '🔍 Test';
 }
 </script>
 `;
