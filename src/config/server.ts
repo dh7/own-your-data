@@ -135,6 +135,7 @@ interface GitUpdateStatus {
   currentCommit: string;
   remoteCommit: string;
   commitsBehind: number;
+  fetchSucceeded: boolean; // Whether we actually reached GitHub
 }
 
 async function checkForGitUpdates(skipFetch: boolean = false): Promise<GitUpdateStatus> {
@@ -144,6 +145,8 @@ async function checkForGitUpdates(skipFetch: boolean = false): Promise<GitUpdate
   try {
     // Get current commit first (this always works locally)
     const { stdout: currentCommit } = await execAsync('git rev-parse HEAD', { cwd: process.cwd() });
+
+    let fetchSucceeded = false;
 
     if (!skipFetch) {
       // Fetch latest from origin with:
@@ -160,9 +163,12 @@ async function checkForGitUpdates(skipFetch: boolean = false): Promise<GitUpdate
             GIT_TERMINAL_PROMPT: '0', // Disable git credential prompts
           }
         });
+        fetchSucceeded = true;
+        console.log('✅ Git fetch succeeded');
       } catch (fetchError) {
         // Fetch failed (likely SSH auth issue), but we can still compare with cached origin/main
-        console.log('⚠️ Git fetch skipped (auth required or timeout)');
+        console.log('⚠️ Git fetch failed (auth required or timeout) - using cached data');
+        fetchSucceeded = false;
       }
     }
 
@@ -186,6 +192,7 @@ async function checkForGitUpdates(skipFetch: boolean = false): Promise<GitUpdate
       currentCommit: currentCommit.trim(),
       remoteCommit,
       commitsBehind,
+      fetchSucceeded,
     };
   } catch (e) {
     // If git commands fail, return safe defaults
@@ -194,6 +201,7 @@ async function checkForGitUpdates(skipFetch: boolean = false): Promise<GitUpdate
       currentCommit: 'unknown',
       remoteCommit: 'unknown',
       commitsBehind: 0,
+      fetchSucceeded: false,
     };
   }
 }

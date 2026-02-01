@@ -113,14 +113,15 @@ export function renderSystemSection(
                     </div>
                     <p id="update-status" style="margin-top: 0.5rem; font-size: 0.85em;"></p>
                 ` : `
-                    <p style="color: #7ee787; margin-bottom: 0.5rem;">✅ You're up to date!</p>
-                    <p style="color: #8b949e; font-size: 0.85em; margin-bottom: 0.75rem;">
+                    <p style="color: #8b949e; margin-bottom: 0.5rem;">
                         Current: <code>${status.currentCommit.substring(0, 7)}</code>
                     </p>
                     <button type="button" onclick="checkForUpdates(this)" class="btn secondary small-btn">
                         🔍 Check for Updates
                     </button>
-                    <p id="update-status" style="margin-top: 0.5rem; font-size: 0.85em;"></p>
+                    <p id="update-status" style="margin-top: 0.5rem; font-size: 0.85em; color: #8b949e;">
+                        Click to check GitHub for new updates
+                    </p>
                 `}
             </div>
             

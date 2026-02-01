@@ -416,6 +416,12 @@ export function renderLayout(sections: string[]): string {
     
     async function checkForUpdates(btn) {
         const statusEl = document.getElementById('update-status');
+        if (!statusEl) {
+            console.error('update-status element not found');
+            alert('Error: Status element not found');
+            return;
+        }
+        
         btn.disabled = true;
         statusEl.textContent = 'Checking for updates...';
         statusEl.style.color = '#f0a030';
@@ -424,16 +430,26 @@ export function renderLayout(sections: string[]): string {
             const res = await fetch('/system/check-updates');
             const data = await res.json();
             
-            if (data.updateAvailable) {
-                statusEl.innerHTML = '⬆️ Update available! (' + data.commitsBehind + ' commits behind) <a href="javascript:location.reload()">Refresh to see</a>';
+            if (!data.fetchSucceeded) {
+                // Fetch failed - warn user
+                statusEl.innerHTML = '⚠️ Could not reach GitHub (SSH auth may be required).<br/>Run <code>ssh-add ~/.ssh/id_rsa</code> to add your key, or check network.';
+                statusEl.style.color = '#f0a030';
+            } else if (data.updateAvailable) {
+                const localShort = data.currentCommit.substring(0, 7);
+                const remoteShort = data.remoteCommit.substring(0, 7);
+                statusEl.innerHTML = '⬆️ Update available! (' + data.commitsBehind + ' commits behind)<br/>' +
+                    'Local: <code>' + localShort + '</code> → Remote: <code>' + remoteShort + '</code><br/>' +
+                    '<a href="javascript:location.reload()">Refresh to see Pull button</a>';
                 statusEl.style.color = '#f0a030';
             } else {
-                statusEl.textContent = '✅ You are up to date!';
+                const remoteShort = data.remoteCommit.substring(0, 7);
+                statusEl.innerHTML = '✅ Up to date! Latest: <code>' + remoteShort + '</code>';
                 statusEl.style.color = '#7ee787';
             }
             btn.disabled = false;
         } catch (e) {
-            statusEl.textContent = '❌ Check failed: ' + e.message;
+            console.error('Check for updates failed:', e);
+            statusEl.textContent = '❌ Check failed: ' + (e.message || e);
             statusEl.style.color = '#f85149';
             btn.disabled = false;
         }
@@ -620,7 +636,6 @@ export function renderLayout(sections: string[]): string {
         }
     }
     
-<<<<<<< Updated upstream
     async function installCloudflared(btn) {
         const statusEl = document.getElementById('cloudflared-install-status');
         btn.disabled = true;
