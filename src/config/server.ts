@@ -1162,6 +1162,36 @@ app.post('/tunnel/stop', async (req, res) => {
   res.json(result);
 });
 
+// Test chrome-history tunnel endpoint (proxy to avoid CORS)
+app.post('/tunnel/test-chrome', async (req, res) => {
+  const { tunnelUrl, apiKey } = req.body;
+  
+  if (!tunnelUrl || !apiKey) {
+    res.json({ success: false, message: 'Missing tunnelUrl or apiKey' });
+    return;
+  }
+  
+  try {
+    // Test the /ping endpoint
+    const pingUrl = tunnelUrl.replace('/api/chrome-history', '/ping');
+    const response = await fetch(pingUrl, {
+      method: 'GET',
+      headers: { 'X-API-Key': apiKey }
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      res.json({ success: true, message: 'Tunnel working!', data });
+    } else if (response.status === 401) {
+      res.json({ success: false, message: 'Tunnel reachable but API key mismatch' });
+    } else {
+      res.json({ success: false, message: `Tunnel error: ${response.status}` });
+    }
+  } catch (e: any) {
+    res.json({ success: false, message: `Cannot reach tunnel: ${e.message}` });
+  }
+});
+
 // API-based tunnel routes
 app.post('/tunnel/test-credentials', async (req, res) => {
   const { accountId, zoneId, apiToken } = req.body;

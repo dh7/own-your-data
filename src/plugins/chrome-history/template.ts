@@ -229,7 +229,7 @@ export function renderTemplate(
                 <p style="color: #8b949e; font-size: 0.85em; margin-bottom: 0.5rem;">Use this URL when accessing from anywhere (other devices, laptops):</p>
                 <div style="display: flex; align-items: center; gap: 8px;">
                     <code id="tunnel-url" style="flex: 1; background: #161b22; padding: 8px 12px; border-radius: 4px; font-size: 0.75rem; word-break: break-all; border: 1px solid #30363d;">${tunnelServerUrl}</code>
-                    <button type="button" onclick="copyTunnelUrl()" style="background: #238636; border: none; cursor: pointer; color: white; padding: 8px 12px; border-radius: 4px; font-size: 0.85rem; white-space: nowrap;">📋 Copy</button>
+                    <button type="button" onclick="copyTunnelUrl(this)" style="background: #238636; border: none; cursor: pointer; color: white; padding: 8px 12px; border-radius: 4px; font-size: 0.85rem; white-space: nowrap;">📋 Copy</button>
                 </div>
                 <p id="tunnel-test-result" style="margin-top: 0.5rem; font-size: 0.85em;"></p>
             </div>
@@ -247,7 +247,7 @@ export function renderTemplate(
                 <p style="color: #8b949e; font-size: 0.85em; margin: 0.5rem 0;">Use this URL when the extension and server are on the same machine:</p>
                 <div style="display: flex; align-items: center; gap: 8px;">
                     <code id="local-url" style="flex: 1; background: #161b22; padding: 8px 12px; border-radius: 4px; font-size: 0.75rem; word-break: break-all; border: 1px solid #30363d;">${localServerUrl}</code>
-                    <button type="button" onclick="copyLocalUrl()" style="background: #238636; border: none; cursor: pointer; color: white; padding: 8px 12px; border-radius: 4px; font-size: 0.85rem; white-space: nowrap;">📋 Copy</button>
+                    <button type="button" onclick="copyLocalUrl(this)" style="background: #238636; border: none; cursor: pointer; color: white; padding: 8px 12px; border-radius: 4px; font-size: 0.85rem; white-space: nowrap;">📋 Copy</button>
                 </div>
             </div>
         </div>
@@ -343,17 +343,17 @@ function copyApiKey() {
     });
 }
 
-function copyTunnelUrl() {
+function copyTunnelUrl(btn) {
     const urlEl = document.getElementById('tunnel-url');
     navigator.clipboard.writeText(urlEl.innerText).then(() => {
-        showCopied(event.target);
+        showCopied(btn);
     });
 }
 
-function copyLocalUrl() {
+function copyLocalUrl(btn) {
     const urlEl = document.getElementById('local-url');
     navigator.clipboard.writeText(urlEl.innerText).then(() => {
-        showCopied(event.target);
+        showCopied(btn);
     });
 }
 
@@ -378,23 +378,24 @@ async function testTunnel() {
     result.innerHTML = '';
     
     try {
-        // Test the /ping endpoint which requires auth
-        const pingUrl = tunnelUrl.replace('/api/chrome-history', '/ping');
-        const response = await fetch(pingUrl, {
-            method: 'GET',
-            headers: { 'X-API-Key': apiKey }
+        // Use server-side proxy to avoid CORS issues
+        const response = await fetch('/tunnel/test-chrome', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tunnelUrl, apiKey })
         });
         
-        if (response.ok) {
-            const data = await response.json();
+        const data = await response.json();
+        
+        if (data.success) {
             result.innerHTML = '<span style="color: #7ee787;">✅ Tunnel working! Connection successful.</span>';
-        } else if (response.status === 401) {
-            result.innerHTML = '<span style="color: #f0a030;">⚠️ Tunnel reachable but API key mismatch. Make sure the server is using the same key.</span>';
+        } else if (data.message.includes('API key')) {
+            result.innerHTML = '<span style="color: #f0a030;">⚠️ ' + data.message + '</span>';
         } else {
-            result.innerHTML = '<span style="color: #ff7b72;">❌ Tunnel error: ' + response.status + '</span>';
+            result.innerHTML = '<span style="color: #ff7b72;">❌ ' + data.message + '</span>';
         }
     } catch (e) {
-        result.innerHTML = '<span style="color: #ff7b72;">❌ Cannot reach tunnel. Is the server running? (npm run chrome:server)</span>';
+        result.innerHTML = '<span style="color: #ff7b72;">❌ Test failed: ' + e.message + '</span>';
     }
     
     btn.disabled = false;
