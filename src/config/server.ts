@@ -576,24 +576,28 @@ app.get('/chrome-extension-configured', async (req, res) => {
     const bgPath = path.join(tempDir, 'background.js');
     const bgContent = await fs.readFile(bgPath, 'utf8');
     
-    // Add code to auto-load settings on install
+    // Add code to auto-load settings on install or update
     const autoConfigCode = `
-// Auto-configure from settings.json on first install
+// Auto-configure from settings.json on install or update
 chrome.runtime.onInstalled.addListener(async (details) => {
-  if (details.reason === 'install') {
+  // Run on install or update (in case user re-downloads)
+  if (details.reason === 'install' || details.reason === 'update') {
     try {
       const response = await fetch(chrome.runtime.getURL('settings.json'));
       const preConfig = await response.json();
       
       if (preConfig.apiKey && preConfig.serverUrl) {
+        // Only set if not already configured (don't overwrite user changes)
         const { settings } = await chrome.storage.local.get('settings');
-        const newSettings = {
-          ...(settings || {}),
-          apiKey: preConfig.apiKey,
-          serverUrl: preConfig.serverUrl
-        };
-        await chrome.storage.local.set({ settings: newSettings });
-        console.log('🎉 Extension pre-configured with API key and server URL!');
+        if (!settings?.apiKey || details.reason === 'install') {
+          const newSettings = {
+            ...(settings || {}),
+            apiKey: preConfig.apiKey,
+            serverUrl: preConfig.serverUrl
+          };
+          await chrome.storage.local.set({ settings: newSettings });
+          console.log('🎉 Extension pre-configured with API key and server URL!');
+        }
       }
     } catch (e) {
       console.log('No pre-config found, using defaults');
