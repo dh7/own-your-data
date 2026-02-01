@@ -44,7 +44,7 @@ export function renderSystemSection(
     let statusHtml = '';
 
     if (status.daemonRunning) {
-        statusHtml = '<span class="status" style="background: #00ff00; color: white;">🔥 Running</span>';
+        statusHtml = '<span class="status" style="background:rgb(6, 170, 6); color: white;">🔥 Running</span>';
     } else if (allDepsGood) {
         statusHtml = '<span class="status" style="background: #bd561d; color: white;">⏸ Ready</span>';
     } else {
