@@ -52,11 +52,20 @@ export function renderLayout(sections: string[]): string {
             border-radius: 6px;
             cursor: pointer;
             text-decoration: none;
-            transition: background 0.2s;
+            transition: all 0.15s ease;
+            transform: translateY(0);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            user-select: none;
         }
         .discord-btn:hover {
             background: #4752c4;
             text-decoration: none;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        }
+        .discord-btn:active {
+            transform: translateY(1px) scale(0.98);
+            box-shadow: 0 1px 2px rgba(0,0,0,0.2);
         }
         .close-btn {
             background: #da3633;
@@ -68,10 +77,19 @@ export function renderLayout(sections: string[]): string {
             font-family: 'JetBrains Mono', monospace;
             border-radius: 6px;
             cursor: pointer;
-            transition: background 0.2s;
+            transition: all 0.15s ease;
+            transform: translateY(0);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            user-select: none;
         }
         .close-btn:hover {
             background: #f85149;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        }
+        .close-btn:active {
+            transform: translateY(1px) scale(0.98);
+            box-shadow: 0 1px 2px rgba(0,0,0,0.2);
         }
         
         /* Accordion styles using details/summary */
@@ -169,14 +187,91 @@ export function renderLayout(sections: string[]): string {
             font-family: 'JetBrains Mono', monospace;
             border-radius: 6px;
             cursor: pointer;
-            transition: background 0.2s;
+            transition: all 0.15s ease;
+            transform: translateY(0);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            position: relative;
+            user-select: none;
         }
         button:hover {
             background: #2ea043;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        }
+        button:active {
+            transform: translateY(1px) scale(0.98);
+            box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+            transition: all 0.05s ease;
         }
         button:disabled {
             opacity: 0.5;
             cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        button:disabled:hover {
+            transform: none;
+            box-shadow: none;
+        }
+        button:disabled:active {
+            transform: none;
+        }
+        
+        /* Secondary button style */
+        button.secondary {
+            background: #30363d;
+        }
+        button.secondary:hover {
+            background: #484f58;
+        }
+        button.secondary:active {
+            background: #21262d;
+        }
+        
+        /* Danger button style */
+        button.danger {
+            background: #da3633;
+        }
+        button.danger:hover {
+            background: #f85149;
+        }
+        button.danger:active {
+            background: #b62324;
+        }
+        
+        /* .btn class for non-button elements (like <a>) */
+        .btn {
+            display: inline-block;
+            background: #238636;
+            color: white;
+            border: none;
+            padding: 0.6rem 1rem;
+            font-size: 0.875rem;
+            font-weight: 600;
+            font-family: 'JetBrains Mono', monospace;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            transform: translateY(0);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            text-decoration: none;
+            user-select: none;
+        }
+        .btn:hover {
+            background: #2ea043;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+            text-decoration: none;
+        }
+        .btn:active {
+            transform: translateY(1px) scale(0.98);
+            box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+        }
+        
+        /* Small button variant */
+        .small-btn, button.small-btn {
+            padding: 0.4rem 0.75rem;
+            font-size: 0.75rem;
         }
         .help {
             font-size: 0.75rem;
