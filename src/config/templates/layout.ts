@@ -619,7 +619,8 @@ export function renderLayout(sections: string[]): string {
             const data = await res.json();
             
             if (data.success) {
-                statusEl.innerHTML = '✅ ' + data.message + ' <a href="http://localhost:8384" target="_blank" class="btn" style="margin-left:1rem;">🌐 Open Syncthing GUI</a>';
+                const syncthingUrl = 'http://' + window.location.hostname + ':8384';
+                statusEl.innerHTML = '✅ ' + data.message + ' <button onclick="window.open(\\'' + syncthingUrl + '\\', \\'_blank\\')" class="btn" style="margin-left:1rem;">🌐 Open Syncthing GUI</button>';
                 statusEl.style.color = '#7ee787';
                 btn.style.display = 'none';
             } else {

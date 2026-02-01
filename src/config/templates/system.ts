@@ -182,9 +182,9 @@ export function renderSystemSection(
                 <p style="color: #7ee787;">✅ Syncthing installed</p>
                 <div style="margin-top: 1rem; padding: 1rem; background: #0a1a1a; border: 1px solid #2a4a4a; border-radius: 4px;">
                     <p style="color: #8b949e; margin-bottom: 0.75rem;">Access the Syncthing Web GUI to manage sync folders and devices:</p>
-                    <a href="http://localhost:8384" target="_blank" class="btn" style="display: inline-block; text-decoration: none;">
+                    <button type="button" onclick="window.open('http://' + window.location.hostname + ':8384', '_blank')" class="btn" style="text-decoration: none;">
                         🌐 Open Syncthing GUI
-                    </a>
+                    </button>
                 </div>
             ` : `
                 <p style="color: #f0a030;">⚠️ Syncthing not installed</p>
