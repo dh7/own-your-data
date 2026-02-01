@@ -481,23 +481,36 @@ app.get('/zip', async (req, res) => {
 // Pre-configured Chrome extension download
 // Creates a zip with API key and server URL already configured
 app.get('/chrome-extension-configured', async (req, res) => {
+  console.log('📦 Creating pre-configured Chrome extension...');
+  
   try {
     const basePath = process.cwd();
     const extensionSrc = path.join(basePath, 'src', 'plugins', 'chrome-history', 'extension');
     const tempDir = path.join(basePath, 'logs', 'chrome-ext-temp');
     const zipPath = path.join(basePath, 'logs', 'chrome-extension-configured.zip');
     
+    // Check extension source exists
+    try {
+      await fs.access(extensionSrc);
+    } catch {
+      console.error('❌ Extension source not found:', extensionSrc);
+      res.status(404).send('Extension source files not found');
+      return;
+    }
+    
     // Get API key
     const apiKeyPath = path.join(basePath, 'auth', 'chrome-api-key.txt');
     let apiKey = '';
     try {
       apiKey = (await fs.readFile(apiKeyPath, 'utf8')).trim();
+      console.log('   Using existing API key');
     } catch {
       // Generate one if missing
       const crypto = await import('crypto');
       apiKey = crypto.randomBytes(32).toString('hex');
       await fs.mkdir(path.dirname(apiKeyPath), { recursive: true });
       await fs.writeFile(apiKeyPath, apiKey);
+      console.log('   Generated new API key');
     }
     
     // Get tunnel URL if configured
@@ -509,6 +522,7 @@ app.get('/chrome-extension-configured', async (req, res) => {
         serverUrl = `https://${tunnelConfig.hostname}/chrome-history/api/chrome-history`;
       }
     } catch { }
+    console.log('   Server URL:', serverUrl);
     
     // Clean up temp dir
     try {
@@ -516,10 +530,22 @@ app.get('/chrome-extension-configured', async (req, res) => {
     } catch { }
     await fs.mkdir(tempDir, { recursive: true });
     
-    // Copy extension files
-    const { promisify } = await import('util');
-    const execAsync = promisify(exec);
-    await execAsync(`cp -r "${extensionSrc}"/* "${tempDir}"/`);
+    // Copy extension files using Node.js (cross-platform)
+    const copyDir = async (src: string, dest: string) => {
+      const entries = await fs.readdir(src, { withFileTypes: true });
+      await fs.mkdir(dest, { recursive: true });
+      for (const entry of entries) {
+        const srcPath = path.join(src, entry.name);
+        const destPath = path.join(dest, entry.name);
+        if (entry.isDirectory()) {
+          await copyDir(srcPath, destPath);
+        } else {
+          await fs.copyFile(srcPath, destPath);
+        }
+      }
+    };
+    await copyDir(extensionSrc, tempDir);
+    console.log('   Copied extension files');
     
     // Create a settings.json file with pre-configured values
     const settingsContent = JSON.stringify({
@@ -571,22 +597,34 @@ chrome.runtime.onInstalled.addListener(async (details) => {
       matches: ['<all_urls>']
     });
     await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2));
+    console.log('   Modified manifest and background.js');
     
-    // Create zip
+    // Create zip using exec
     try {
       await fs.unlink(zipPath);
     } catch { }
+    
+    const { promisify } = await import('util');
+    const execAsync = promisify(exec);
     await execAsync(`cd "${tempDir}" && zip -r "${zipPath}" .`);
     
-    console.log(`📦 Created pre-configured extension: chrome-extension-configured.zip`);
-    console.log(`   Server URL: ${serverUrl}`);
+    // Verify zip was created
+    const zipStat = await fs.stat(zipPath);
+    console.log(`📦 Created zip: ${zipPath} (${zipStat.size} bytes)`);
     
     // Clean up temp
     await fs.rm(tempDir, { recursive: true });
     
-    res.download(zipPath, 'chrome-extension-configured.zip');
+    // Send the file
+    res.download(zipPath, 'chrome-extension-configured.zip', (err) => {
+      if (err) {
+        console.error('❌ Download error:', err);
+      } else {
+        console.log('✅ Extension downloaded successfully');
+      }
+    });
   } catch (e: any) {
-    console.error('Failed to create configured extension:', e);
+    console.error('❌ Failed to create configured extension:', e);
     res.status(500).send(`Failed to create extension: ${e.message}`);
   }
 });
