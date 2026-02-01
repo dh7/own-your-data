@@ -476,6 +476,7 @@ app.get('/zip', async (req, res) => {
     res.setHeader('Content-Type', 'application/zip');
     res.setHeader('Content-Disposition', `attachment; filename="${safeZipName}"`);
     res.setHeader('Content-Length', zipStat.size);
+    res.setHeader('Connection', 'close');
     
     const { createReadStream } = await import('fs');
     const fileStream = createReadStream(zipPath);
@@ -637,6 +638,7 @@ chrome.runtime.onInstalled.addListener(async (details) => {
     res.setHeader('Content-Type', 'application/zip');
     res.setHeader('Content-Disposition', 'attachment; filename="chrome-extension-configured.zip"');
     res.setHeader('Content-Length', zipStat2.size);
+    res.setHeader('Connection', 'close');
     
     const { createReadStream } = await import('fs');
     const fileStream = createReadStream(zipPath);
