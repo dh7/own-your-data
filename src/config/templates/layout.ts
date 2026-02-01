@@ -317,6 +317,160 @@ export function renderLayout(sections: string[]): string {
         }, 100);
     }
     
+    // ============ UPDATE & RESTART FUNCTIONS ============
+    
+    async function checkForUpdates(btn) {
+        const statusEl = document.getElementById('update-status');
+        btn.disabled = true;
+        statusEl.textContent = 'Checking for updates...';
+        statusEl.style.color = '#f0a030';
+        
+        try {
+            const res = await fetch('/system/check-updates');
+            const data = await res.json();
+            
+            if (data.updateAvailable) {
+                statusEl.innerHTML = '⬆️ Update available! (' + data.commitsBehind + ' commits behind) <a href="javascript:location.reload()">Refresh to see</a>';
+                statusEl.style.color = '#f0a030';
+            } else {
+                statusEl.textContent = '✅ You are up to date!';
+                statusEl.style.color = '#7ee787';
+            }
+            btn.disabled = false;
+        } catch (e) {
+            statusEl.textContent = '❌ Check failed: ' + e.message;
+            statusEl.style.color = '#f85149';
+            btn.disabled = false;
+        }
+    }
+    
+    async function pullUpdates(btn) {
+        const statusEl = document.getElementById('update-status');
+        btn.disabled = true;
+        statusEl.textContent = 'Pulling updates...';
+        statusEl.style.color = '#f0a030';
+        
+        try {
+            const res = await fetch('/system/pull-updates', { method: 'POST' });
+            const data = await res.json();
+            
+            if (data.success) {
+                statusEl.innerHTML = '✅ ' + data.message + '<br/><button onclick="restartConfig(this)" class="btn" style="margin-top: 0.5rem;">🔄 Restart to Apply</button>';
+                statusEl.style.color = '#7ee787';
+            } else {
+                statusEl.textContent = '❌ ' + (data.error || 'Pull failed');
+                statusEl.style.color = '#f85149';
+                btn.disabled = false;
+            }
+        } catch (e) {
+            statusEl.textContent = '❌ ' + e.message;
+            statusEl.style.color = '#f85149';
+            btn.disabled = false;
+        }
+    }
+    
+    async function restartConfig(btn) {
+        const statusEl = document.getElementById('restart-status') || document.getElementById('update-status');
+        btn.disabled = true;
+        if (statusEl) {
+            statusEl.textContent = 'Restarting config server...';
+            statusEl.style.color = '#f0a030';
+        }
+        
+        try {
+            await fetch('/system/restart-config', { method: 'POST' });
+            // Server will exit, wait and reload
+            setTimeout(() => {
+                if (statusEl) statusEl.textContent = 'Waiting for server to restart...';
+                // Try to reload after a delay
+                setTimeout(() => location.reload(), 3000);
+            }, 500);
+        } catch (e) {
+            if (statusEl) {
+                statusEl.textContent = '❌ ' + e.message;
+                statusEl.style.color = '#f85149';
+            }
+            btn.disabled = false;
+        }
+    }
+    
+    async function startDaemon(btn) {
+        const statusEl = document.getElementById('restart-status');
+        btn.disabled = true;
+        statusEl.textContent = 'Starting daemon...';
+        statusEl.style.color = '#f0a030';
+        
+        try {
+            const res = await fetch('/system/start-daemon', { method: 'POST' });
+            const data = await res.json();
+            
+            if (data.success) {
+                statusEl.innerHTML = '✅ ' + data.message + ' <a href="javascript:location.reload()">Refresh</a>';
+                statusEl.style.color = '#7ee787';
+            } else {
+                statusEl.textContent = '❌ ' + (data.error || 'Start failed');
+                statusEl.style.color = '#f85149';
+                btn.disabled = false;
+            }
+        } catch (e) {
+            statusEl.textContent = '❌ ' + e.message;
+            statusEl.style.color = '#f85149';
+            btn.disabled = false;
+        }
+    }
+    
+    async function stopDaemon(btn) {
+        const statusEl = document.getElementById('restart-status');
+        btn.disabled = true;
+        statusEl.textContent = 'Stopping daemon...';
+        statusEl.style.color = '#f0a030';
+        
+        try {
+            const res = await fetch('/system/stop-daemon', { method: 'POST' });
+            const data = await res.json();
+            
+            if (data.success) {
+                statusEl.innerHTML = '✅ ' + data.message + ' <a href="javascript:location.reload()">Refresh</a>';
+                statusEl.style.color = '#7ee787';
+            } else {
+                statusEl.textContent = '❌ ' + (data.error || 'Stop failed');
+                statusEl.style.color = '#f85149';
+                btn.disabled = false;
+            }
+        } catch (e) {
+            statusEl.textContent = '❌ ' + e.message;
+            statusEl.style.color = '#f85149';
+            btn.disabled = false;
+        }
+    }
+    
+    async function restartDaemon(btn) {
+        const statusEl = document.getElementById('restart-status');
+        btn.disabled = true;
+        statusEl.textContent = 'Restarting daemon...';
+        statusEl.style.color = '#f0a030';
+        
+        try {
+            const res = await fetch('/system/restart-daemon', { method: 'POST' });
+            const data = await res.json();
+            
+            if (data.success) {
+                statusEl.innerHTML = '✅ ' + data.message + ' <a href="javascript:location.reload()">Refresh</a>';
+                statusEl.style.color = '#7ee787';
+            } else {
+                statusEl.textContent = '❌ ' + (data.error || 'Restart failed');
+                statusEl.style.color = '#f85149';
+                btn.disabled = false;
+            }
+        } catch (e) {
+            statusEl.textContent = '❌ ' + e.message;
+            statusEl.style.color = '#f85149';
+            btn.disabled = false;
+        }
+    }
+    
+    // ============ DEPENDENCY FUNCTIONS ============
+    
     async function recheckPlaywright(btn) {
         const statusEl = document.getElementById('playwright-recheck-status');
         btn.disabled = true;

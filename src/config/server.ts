@@ -130,6 +130,49 @@ async function checkWhisperX(): Promise<boolean> {
   }
 }
 
+interface GitUpdateStatus {
+  updateAvailable: boolean;
+  currentCommit: string;
+  remoteCommit: string;
+  commitsBehind: number;
+}
+
+async function checkForGitUpdates(): Promise<GitUpdateStatus> {
+  const { promisify } = await import('util');
+  const execAsync = promisify(exec);
+
+  try {
+    // Fetch latest from origin (silently)
+    await execAsync('git fetch origin main', { cwd: process.cwd() });
+
+    // Get current commit
+    const { stdout: currentCommit } = await execAsync('git rev-parse HEAD', { cwd: process.cwd() });
+
+    // Get remote commit
+    const { stdout: remoteCommit } = await execAsync('git rev-parse origin/main', { cwd: process.cwd() });
+
+    // Count commits behind
+    const { stdout: behindCount } = await execAsync('git rev-list HEAD..origin/main --count', { cwd: process.cwd() });
+
+    const commitsBehind = parseInt(behindCount.trim()) || 0;
+
+    return {
+      updateAvailable: commitsBehind > 0,
+      currentCommit: currentCommit.trim(),
+      remoteCommit: remoteCommit.trim(),
+      commitsBehind,
+    };
+  } catch (e) {
+    // If git commands fail, return safe defaults
+    return {
+      updateAvailable: false,
+      currentCommit: 'unknown',
+      remoteCommit: 'unknown',
+      commitsBehind: 0,
+    };
+  }
+}
+
 // ============ ROUTES ============
 
 // Main page
@@ -145,6 +188,7 @@ app.get('/', async (req, res) => {
   const syncthingInstalled = await checkSyncthing();
   const tunnelStatus = await getTunnelStatusAsync();
   const whisperXInstalled = await checkWhisperX();
+  const gitStatus = await checkForGitUpdates();
 
   // Discover and render plugin sections
   const plugins = await discoverPlugins();
@@ -173,6 +217,10 @@ app.get('/', async (req, res) => {
       tunnelUrl: tunnelStatus.tunnelUrl,
       tunnelRoutes: tunnelPlugins,
       whisperXInstalled,
+      updateAvailable: gitStatus.updateAvailable,
+      currentCommit: gitStatus.currentCommit,
+      remoteCommit: gitStatus.remoteCommit,
+      commitsBehind: gitStatus.commitsBehind,
     }, savedSection === 'system' || savedSection === 'storage' || savedSection === 'daemon'),
     renderDomainSection(
       {
@@ -697,6 +745,130 @@ app.post('/dependencies/install-syncthing', async (req, res) => {
       error: e.message,
       output: e.stdout || e.stderr || e.message
     });
+  }
+});
+
+// ============ UPDATES & RESTART ROUTES ============
+
+app.get('/system/check-updates', async (req, res) => {
+  console.log('🔍 Checking for updates...');
+  const status = await checkForGitUpdates();
+  res.json(status);
+});
+
+app.post('/system/pull-updates', async (req, res) => {
+  console.log('⬇️ Pulling updates from GitHub...');
+
+  try {
+    const { promisify } = await import('util');
+    const execAsync = promisify(exec);
+
+    // First stash any local changes
+    await execAsync('git stash', { cwd: process.cwd() });
+
+    // Pull latest changes
+    const { stdout, stderr } = await execAsync('git pull origin main', { cwd: process.cwd() });
+
+    console.log('✅ Updates pulled successfully');
+    res.json({
+      success: true,
+      message: 'Updates pulled successfully! Restart the server to apply changes.',
+      output: stdout + (stderr ? '\n' + stderr : '')
+    });
+  } catch (e: any) {
+    console.error('❌ Failed to pull updates:', e.message);
+    res.json({
+      success: false,
+      error: e.message,
+      output: e.stdout || e.stderr || e.message
+    });
+  }
+});
+
+app.post('/system/restart-config', async (req, res) => {
+  console.log('🔄 Restart config requested...');
+  res.json({ success: true, message: 'Config server will restart. Page will reload shortly.' });
+
+  // Give time for response to send, then exit (pm2/nodemon will restart, or user will need to manually restart)
+  setTimeout(() => {
+    console.log('🔄 Restarting config server...');
+    process.exit(0);
+  }, 500);
+});
+
+app.post('/system/start-daemon', async (req, res) => {
+  console.log('▶️ Starting daemon...');
+
+  try {
+    const { spawn } = await import('child_process');
+
+    // Start daemon in background
+    const child = spawn('npm', ['run', 'get_all'], {
+      cwd: process.cwd(),
+      detached: true,
+      stdio: 'ignore'
+    });
+    child.unref();
+
+    res.json({ success: true, message: 'Daemon started!' });
+  } catch (e: any) {
+    console.error('❌ Failed to start daemon:', e.message);
+    res.json({ success: false, error: e.message });
+  }
+});
+
+app.post('/system/stop-daemon', async (req, res) => {
+  console.log('⏹️ Stopping daemon...');
+
+  try {
+    const pidPath = path.join(process.cwd(), 'logs', 'get_all.pid');
+    const pidData = await fs.readFile(pidPath, 'utf-8');
+    const pid = parseInt(pidData.trim());
+
+    if (pid) {
+      process.kill(pid, 'SIGTERM');
+      await fs.unlink(pidPath).catch(() => { });
+      res.json({ success: true, message: 'Daemon stopped!' });
+    } else {
+      res.json({ success: false, error: 'Invalid PID' });
+    }
+  } catch (e: any) {
+    console.error('❌ Failed to stop daemon:', e.message);
+    res.json({ success: false, error: e.message });
+  }
+});
+
+app.post('/system/restart-daemon', async (req, res) => {
+  console.log('🔄 Restarting daemon...');
+
+  try {
+    // First stop
+    const pidPath = path.join(process.cwd(), 'logs', 'get_all.pid');
+    try {
+      const pidData = await fs.readFile(pidPath, 'utf-8');
+      const pid = parseInt(pidData.trim());
+      if (pid) {
+        process.kill(pid, 'SIGTERM');
+        await fs.unlink(pidPath).catch(() => { });
+      }
+    } catch { }
+
+    // Wait a bit
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    // Then start
+    const { spawn } = await import('child_process');
+    const child = spawn('npm', ['run', 'get_all'], {
+      cwd: process.cwd(),
+      detached: true,
+      stdio: 'ignore'
+    });
+    child.unref();
+
+    res.json({ success: true, message: 'Daemon restarted!' });
+  } catch (e: any) {
+    console.error('❌ Failed to restart daemon:', e.message);
+    res.json({ success: false, error: e.message });
   }
 });
 

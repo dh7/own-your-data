@@ -24,6 +24,11 @@ export interface SystemStatus {
     tunnelUrl: string | null;
     tunnelRoutes: TunnelRouteInfo[];
     whisperXInstalled: boolean;
+    // Update status
+    updateAvailable: boolean;
+    currentCommit: string;
+    remoteCommit: string;
+    commitsBehind: number;
 }
 
 export function renderSystemSection(
@@ -84,6 +89,67 @@ export function renderSystemSection(
         ${statusHtml}
     </summary>
     <div class="section-content">
+        <!-- Updates & Restart -->
+        <h3 style="margin-bottom: 1rem; color: #58a6ff;">🔄 Updates & Restart</h3>
+        
+        <div style="display: flex; gap: 1rem; align-items: flex-start; flex-wrap: wrap;">
+            <!-- Update Check -->
+            <div style="flex: 1; min-width: 250px; padding: 1rem; background: #0d1117; border: 1px solid #30363d; border-radius: 6px;">
+                <h4 style="margin-bottom: 0.75rem; color: #79c0ff;">📦 Software Updates</h4>
+                ${status.updateAvailable ? `
+                    <p style="color: #f0a030; margin-bottom: 0.5rem;">
+                        ⬆️ Update available! (${status.commitsBehind} commit${status.commitsBehind > 1 ? 's' : ''} behind)
+                    </p>
+                    <p style="color: #8b949e; font-size: 0.85em; margin-bottom: 0.75rem;">
+                        Local: <code>${status.currentCommit.substring(0, 7)}</code> → Remote: <code>${status.remoteCommit.substring(0, 7)}</code>
+                    </p>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button type="button" onclick="pullUpdates(this)" class="btn">
+                            ⬇️ Pull Updates
+                        </button>
+                        <button type="button" onclick="checkForUpdates(this)" class="btn secondary small-btn">
+                            🔍 Re-check
+                        </button>
+                    </div>
+                    <p id="update-status" style="margin-top: 0.5rem; font-size: 0.85em;"></p>
+                ` : `
+                    <p style="color: #7ee787; margin-bottom: 0.5rem;">✅ You're up to date!</p>
+                    <p style="color: #8b949e; font-size: 0.85em; margin-bottom: 0.75rem;">
+                        Current: <code>${status.currentCommit.substring(0, 7)}</code>
+                    </p>
+                    <button type="button" onclick="checkForUpdates(this)" class="btn secondary small-btn">
+                        🔍 Check for Updates
+                    </button>
+                    <p id="update-status" style="margin-top: 0.5rem; font-size: 0.85em;"></p>
+                `}
+            </div>
+            
+            <!-- Restart Controls -->
+            <div style="flex: 1; min-width: 250px; padding: 1rem; background: #0d1117; border: 1px solid #30363d; border-radius: 6px;">
+                <h4 style="margin-bottom: 0.75rem; color: #79c0ff;">🔁 Restart Services</h4>
+                <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                    <button type="button" onclick="restartConfig(this)" class="btn secondary">
+                        🔄 Restart Config Server
+                    </button>
+                    ${status.daemonRunning ? `
+                        <button type="button" onclick="restartDaemon(this)" class="btn secondary">
+                            🔄 Restart Daemon
+                        </button>
+                        <button type="button" onclick="stopDaemon(this)" class="btn secondary" style="background: #da3633;">
+                            ⏹️ Stop Daemon
+                        </button>
+                    ` : `
+                        <button type="button" onclick="startDaemon(this)" class="btn">
+                            ▶️ Start Daemon
+                        </button>
+                    `}
+                </div>
+                <p id="restart-status" style="margin-top: 0.5rem; font-size: 0.85em;"></p>
+            </div>
+        </div>
+
+        <hr style="margin: 1.5rem 0; border: none; border-top: 1px solid #30363d;" />
+
         <!-- Dependencies -->
         <h3 style="margin-bottom: 1rem; color: #58a6ff;">🔧 Dependencies</h3>
         
