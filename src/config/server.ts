@@ -471,10 +471,27 @@ app.get('/zip', async (req, res) => {
     await execAsync(`cd "${fullPath}" && zip -r "${zipPath}" .`);
     console.log(`📦 Created zip: ${safeZipName}`);
 
-    res.download(zipPath, safeZipName);
+    // Send with proper headers and streaming
+    const zipStat = await fs.stat(zipPath);
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${safeZipName}"`);
+    res.setHeader('Content-Length', zipStat.size);
+    
+    const { createReadStream } = await import('fs');
+    const fileStream = createReadStream(zipPath);
+    fileStream.pipe(res);
+    
+    fileStream.on('error', (err) => {
+      console.error('❌ Stream error:', err);
+      if (!res.headersSent) {
+        res.status(500).send('Download failed');
+      }
+    });
   } catch (e: any) {
     console.error(`Failed to create zip:`, e);
-    res.status(500).send(`Failed to create zip: ${e.message}`);
+    if (!res.headersSent) {
+      res.status(500).send(`Failed to create zip: ${e.message}`);
+    }
   }
 });
 
@@ -615,17 +632,31 @@ chrome.runtime.onInstalled.addListener(async (details) => {
     // Clean up temp
     await fs.rm(tempDir, { recursive: true });
     
-    // Send the file
-    res.download(zipPath, 'chrome-extension-configured.zip', (err) => {
-      if (err) {
-        console.error('❌ Download error:', err);
-      } else {
-        console.log('✅ Extension downloaded successfully');
+    // Send the file with proper headers
+    const zipStat2 = await fs.stat(zipPath);
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', 'attachment; filename="chrome-extension-configured.zip"');
+    res.setHeader('Content-Length', zipStat2.size);
+    
+    const { createReadStream } = await import('fs');
+    const fileStream = createReadStream(zipPath);
+    fileStream.pipe(res);
+    
+    fileStream.on('end', () => {
+      console.log('✅ Extension downloaded successfully');
+    });
+    
+    fileStream.on('error', (err) => {
+      console.error('❌ Stream error:', err);
+      if (!res.headersSent) {
+        res.status(500).send('Download failed');
       }
     });
   } catch (e: any) {
     console.error('❌ Failed to create configured extension:', e);
-    res.status(500).send(`Failed to create extension: ${e.message}`);
+    if (!res.headersSent) {
+      res.status(500).send(`Failed to create extension: ${e.message}`);
+    }
   }
 });
 
