@@ -371,6 +371,7 @@ export function renderLayout(sections: string[]): string {
         }
     }
     
+<<<<<<< Updated upstream
     async function installCloudflared(btn) {
         const statusEl = document.getElementById('cloudflared-install-status');
         btn.disabled = true;
@@ -652,6 +653,31 @@ export function renderLayout(sections: string[]): string {
             statusEl.style.color = '#f85149';
             btn.disabled = false;
             btn.textContent = '🗑️ Delete Tunnel';
+        }
+    }
+    
+    async function recheckWhisperX(btn) {
+        const statusEl = document.getElementById('whisperx-recheck-status');
+        btn.disabled = true;
+        statusEl.textContent = 'Checking...';
+        statusEl.style.color = '#f0a030';
+        
+        try {
+            const res = await fetch('/dependencies/check-whisperx');
+            const data = await res.json();
+            
+            if (data.installed) {
+                statusEl.textContent = '✅ Installed! Refresh page to update UI.';
+                statusEl.style.color = '#7ee787';
+            } else {
+                statusEl.textContent = '❌ Still not installed';
+                statusEl.style.color = '#f85149';
+                btn.disabled = false;
+            }
+        } catch (e) {
+            statusEl.textContent = '❌ Check failed';
+            statusEl.style.color = '#f85149';
+            btn.disabled = false;
         }
     }
     </script>

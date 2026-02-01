@@ -109,9 +109,21 @@ async function checkDaemonRunning(): Promise<boolean> {
 async function checkSyncthing(): Promise<boolean> {
   const { promisify } = await import('util');
   const execAsync = promisify(exec);
-  
+
   try {
     await execAsync('which syncthing');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function checkWhisperX(): Promise<boolean> {
+  const { promisify } = await import('util');
+  const execAsync = promisify(exec);
+
+  try {
+    await execAsync('pip show whisperx');
     return true;
   } catch {
     return false;
@@ -132,6 +144,7 @@ app.get('/', async (req, res) => {
   const daemonRunning = await checkDaemonRunning();
   const syncthingInstalled = await checkSyncthing();
   const tunnelStatus = await getTunnelStatusAsync();
+  const whisperXInstalled = await checkWhisperX();
 
   // Discover and render plugin sections
   const plugins = await discoverPlugins();
@@ -159,6 +172,7 @@ app.get('/', async (req, res) => {
       tunnelRunning: tunnelStatus.tunnelRunning,
       tunnelUrl: tunnelStatus.tunnelUrl,
       tunnelRoutes: tunnelPlugins,
+      whisperXInstalled,
     }, savedSection === 'system' || savedSection === 'storage' || savedSection === 'daemon'),
     renderDomainSection(
       {
@@ -648,10 +662,10 @@ app.post('/dependencies/install-syncthing', async (req, res) => {
   try {
     const { promisify } = await import('util');
     const execAsync = promisify(exec);
-    
+
     const platform = process.platform;
     let installCmd: string;
-    
+
     if (platform === 'darwin') {
       installCmd = 'brew install syncthing';
     } else if (platform === 'linux') {
@@ -735,18 +749,18 @@ app.post('/tunnel/save-credentials', async (req, res) => {
     res.json({ success: false, message: 'All credential fields are required' });
     return;
   }
-  
+
   // Test credentials first
   console.log('☁️  Verifying Cloudflare credentials...');
   try {
     const testResult = await testCredentials({ accountId, zoneId, apiToken });
     console.log('☁️  Test result:', testResult);
-    
+
     if (!testResult.success) {
       res.json(testResult);
       return;
     }
-    
+
     // Save credentials
     console.log('☁️  Saving credentials...');
     await saveCredentials({ accountId, zoneId, apiToken });
@@ -764,16 +778,16 @@ app.post('/tunnel/setup', async (req, res) => {
     res.json({ success: false, message: 'Tunnel name and subdomain are required' });
     return;
   }
-  
+
   const credentials = await loadCredentials();
   if (!credentials) {
     res.json({ success: false, message: 'Cloudflare credentials not configured' });
     return;
   }
-  
+
   console.log(`☁️  Setting up tunnel "${name}" with subdomain "${subdomain}"...`);
   const result = await setupTunnel(credentials, name, subdomain, PROXY_PORT);
-  
+
   if (result.success && result.tunnelId && result.tunnelToken && result.hostname) {
     // Save the full tunnel config
     await saveTunnelConfig({
@@ -786,7 +800,7 @@ app.post('/tunnel/setup', async (req, res) => {
       createdAt: new Date().toISOString(),
     });
   }
-  
+
   res.json(result);
 });
 
@@ -796,17 +810,17 @@ app.post('/tunnel/teardown', async (req, res) => {
     res.json({ success: false, message: 'No tunnel configured' });
     return;
   }
-  
+
   // Stop the tunnel first
   await stopTunnel();
-  
+
   console.log('☁️  Tearing down tunnel...');
   const result = await teardownTunnel(config.credentials, config.tunnelId, config.hostname);
-  
+
   if (result.success) {
     await deleteTunnelConfig();
   }
-  
+
   res.json(result);
 });
 
@@ -814,6 +828,11 @@ app.post('/tunnel/start-token', async (req, res) => {
   console.log('☁️  Starting tunnel with token...');
   const result = await startTunnelWithToken();
   res.json(result);
+});
+
+app.get('/dependencies/check-whisperx', async (req, res) => {
+  const installed = await checkWhisperX();
+  res.json({ installed });
 });
 
 app.get('/status', (req, res) => {
