@@ -185,12 +185,12 @@ function renderStateContent(status: DomainStatus, stateNumber: number): string {
             <div style="padding: 1rem; background: #0d1117; border: 1px solid #30363d; border-radius: 6px;">
                 <div style="margin-bottom: 1rem;">
                     <label style="display: block; margin-bottom: 0.5rem; color: #8b949e;">Tunnel Name</label>
-                    <input type="text" id="tunnel-name" placeholder="secondbrain" style="width: 100%; max-width: 300px;" />
+                    <input type="text" id="tunnel-name" value="secondbrain" placeholder="secondbrain" style="width: 100%; max-width: 300px;" />
                     <p class="help">A friendly identifier for your tunnel in Cloudflare dashboard</p>
                 </div>
                 <div style="margin-bottom: 1rem;">
                     <label style="display: block; margin-bottom: 0.5rem; color: #8b949e;">Subdomain</label>
-                    <input type="text" id="tunnel-subdomain" placeholder="api" style="width: 100%; max-width: 300px;" />
+                    <input type="text" id="tunnel-subdomain" value="api" placeholder="api" style="width: 100%; max-width: 300px;" />
                     <p class="help">
                         Your public base URL will be: <code><span id="subdomain-preview">api</span>.yourdomain.com</code><br/>
                         All plugins will be accessible under this URL via their path prefixes.
