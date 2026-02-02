@@ -147,6 +147,9 @@ export interface PluginRenderData {
     /** Whether Playwright browsers are installed */
     playwrightInstalled?: boolean;
 
+    /** Whether Docker is installed */
+    dockerInstalled?: boolean;
+
     /** Whether user is logged in (for plugins that require auth) */
     isLoggedIn?: boolean;
 

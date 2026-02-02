@@ -23,7 +23,8 @@ export interface SystemStatus {
     tunnelRunning: boolean;
     tunnelUrl: string | null;
     tunnelRoutes: TunnelRouteInfo[];
-    whisperXInstalled: boolean;
+    dockerInstalled: boolean;
+    nvidiaDockerInstalled: boolean;
     // Update status
     updateAvailable: boolean;
     currentCommit: string;
@@ -229,34 +230,94 @@ export function renderSystemSection(
             `}
         </div>
 
-        <!-- WhisperX -->
-        <div style="margin-top: 1.5rem; padding-top: 1rem;">
-            ${status.whisperXInstalled ? `
-                <p style="color: #7ee787;">✅ WhisperX installed</p>
-                <p style="color: #8b949e; margin-top: 0.5rem; font-size: 0.9em;">
-                    Automatic speech recognition with word-level timestamps and speaker diarization.
-                </p>
+        <!-- Docker -->
+        <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #30363d;">
+            <h4 style="margin-bottom: 0.75rem; color: #79c0ff;">🐳 Docker</h4>
+            ${status.dockerInstalled ? `
+                <p style="color: #7ee787;">✅ Docker installed</p>
+                ${status.nvidiaDockerInstalled ? `
+                    <p style="color: #7ee787;">✅ NVIDIA Container Toolkit installed (GPU support)</p>
+                ` : `
+                    <p style="color: #8b949e; margin-top: 0.5rem; font-size: 0.9em;">
+                        💡 For GPU acceleration, install the NVIDIA Container Toolkit.
+                    </p>
+                `}
+                <button type="button" onclick="recheckDocker(this)" style="margin-top: 0.75rem;" class="btn secondary small-btn">
+                    🔄 Recheck
+                </button>
+                <span id="docker-recheck-status" style="margin-left: 0.5rem;"></span>
             ` : `
-                <p style="color: #f0a030;">⚠️ WhisperX not installed</p>
+                <p style="color: #f0a030;">⚠️ Docker not installed</p>
                 <p style="color: #8b949e; margin-top: 0.5rem; font-size: 0.9em;">
-                    WhisperX provides automatic speech recognition with word-level timestamps and speaker diarization.
+                    Docker is used for running WhisperX transcription without complex local setup.
                 </p>
                 <div style="margin-top: 1rem; padding: 1rem; background: #1a1a0a; border: 1px solid #4a4a2a; border-radius: 4px;">
-                    <p style="color: #f0a030; margin-bottom: 0.5rem;">
-                        Run this command to install WhisperX:
-                    </p>
-                    <code style="background: #0a0a0a; padding: 0.5rem 1rem; border-radius: 4px; display: block;">
-                        pip install whisperx
-                    </code>
-                    <p style="color: #8b949e; margin-top: 0.75rem; font-size: 0.85em;">
-                        <strong>Note:</strong> For GPU acceleration, install CUDA toolkit 12.8 first.<br>
-                        For speaker diarization, you'll also need a Hugging Face token.
-                    </p>
-                    <button type="button" onclick="recheckWhisperX(this)" style="margin-top: 1rem;" class="btn secondary">
+                    <p style="color: #f0a030; margin-bottom: 0.75rem;">Choose your platform:</p>
+                    
+                    <details style="margin-bottom: 0.75rem;">
+                        <summary style="cursor: pointer; color: #58a6ff;">🍎 macOS</summary>
+                        <div style="margin-top: 0.5rem; padding-left: 1rem;">
+                            <p style="color: #8b949e; margin-bottom: 0.5rem;">Install Docker Desktop (includes GPU support for Apple Silicon):</p>
+                            <code style="background: #0a0a0a; padding: 0.5rem 1rem; border-radius: 4px; display: block; margin-bottom: 0.5rem;">
+                                brew install --cask docker
+                            </code>
+                            <p style="color: #8b949e; font-size: 0.85em;">
+                                Or download from <a href="https://www.docker.com/products/docker-desktop/" target="_blank" style="color: #58a6ff;">docker.com</a>
+                            </p>
+                        </div>
+                    </details>
+                    
+                    <details style="margin-bottom: 0.75rem;">
+                        <summary style="cursor: pointer; color: #58a6ff;">🐧 Linux (CPU only)</summary>
+                        <div style="margin-top: 0.5rem; padding-left: 1rem;">
+                            <code style="background: #0a0a0a; padding: 0.5rem 1rem; border-radius: 4px; display: block; margin-bottom: 0.5rem; white-space: pre-wrap;">curl -fsSL https://get.docker.com | sh
+sudo usermod -aG docker $USER</code>
+                            <p style="color: #8b949e; font-size: 0.85em;">Log out and back in after adding yourself to the docker group.</p>
+                        </div>
+                    </details>
+                    
+                    <details>
+                        <summary style="cursor: pointer; color: #58a6ff;">🐧 Linux + NVIDIA GPU</summary>
+                        <div style="margin-top: 0.5rem; padding-left: 1rem;">
+                            <p style="color: #8b949e; margin-bottom: 0.5rem;">1. Install Docker (if not already):</p>
+                            <code style="background: #0a0a0a; padding: 0.5rem 1rem; border-radius: 4px; display: block; margin-bottom: 0.75rem;">
+                                curl -fsSL https://get.docker.com | sh
+                            </code>
+                            <p style="color: #8b949e; margin-bottom: 0.5rem;">2. Install NVIDIA Container Toolkit:</p>
+                            <code style="background: #0a0a0a; padding: 0.5rem 1rem; border-radius: 4px; display: block; white-space: pre-wrap; margin-bottom: 0.5rem;">curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | \\
+  sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \\
+  sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+sudo apt-get update && sudo apt-get install -y nvidia-container-toolkit
+sudo nvidia-ctk runtime configure --runtime=docker
+sudo systemctl restart docker</code>
+                            <p style="color: #8b949e; font-size: 0.85em; margin-top: 0.5rem;">
+                                See <a href="https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html" target="_blank" style="color: #58a6ff;">NVIDIA docs</a> for other distros.
+                            </p>
+                        </div>
+                    </details>
+                    
+                    <button type="button" onclick="recheckDocker(this)" style="margin-top: 1rem;" class="btn secondary">
                         🔄 Recheck
                     </button>
-                    <span id="whisperx-recheck-status" style="margin-left: 0.5rem;"></span>
+                    <span id="docker-recheck-status" style="margin-left: 0.5rem;"></span>
                 </div>
+            `}
+        </div>
+
+        <!-- WhisperX (via Docker) -->
+        <div style="margin-top: 1.5rem; padding-top: 1rem;">
+            ${status.dockerInstalled ? `
+                <p style="color: #7ee787;">✅ WhisperX ready via Docker</p>
+                <p style="color: #8b949e; margin-top: 0.5rem; font-size: 0.9em;">
+                    The transcripts plugin uses <code>ghcr.io/jim60105/whisperx</code>.
+                    ${status.nvidiaDockerInstalled ? 'GPU acceleration available.' : 'Running in CPU mode.'}
+                </p>
+            ` : `
+                <p style="color: #f0a030;">⚠️ WhisperX requires Docker</p>
+                <p style="color: #8b949e; margin-top: 0.5rem; font-size: 0.9em;">
+                    Install Docker above to enable audio transcription.
+                </p>
             `}
         </div>
 

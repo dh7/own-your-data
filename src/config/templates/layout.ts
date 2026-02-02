@@ -955,21 +955,26 @@ export function renderLayout(sections: string[]): string {
         }
     }
     
-    async function recheckWhisperX(btn) {
-        const statusEl = document.getElementById('whisperx-recheck-status');
+    async function recheckDocker(btn) {
+        const statusEl = document.getElementById('docker-recheck-status');
         btn.disabled = true;
         statusEl.textContent = 'Checking...';
         statusEl.style.color = '#f0a030';
         
         try {
-            const res = await fetch('/dependencies/check-whisperx');
+            const res = await fetch('/dependencies/check-docker');
             const data = await res.json();
             
-            if (data.installed) {
-                statusEl.textContent = '✅ Installed! Refresh page to update UI.';
+            if (data.dockerInstalled) {
+                let msg = '✅ Docker installed!';
+                if (data.nvidiaDockerInstalled) {
+                    msg += ' (GPU support detected)';
+                }
+                msg += ' Refresh page to update UI.';
+                statusEl.textContent = msg;
                 statusEl.style.color = '#7ee787';
             } else {
-                statusEl.textContent = '❌ Still not installed';
+                statusEl.textContent = '❌ Docker not detected';
                 statusEl.style.color = '#f85149';
                 btn.disabled = false;
             }

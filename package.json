@@ -28,6 +28,8 @@
     "openai:push": "ts-node src/plugins/openai/push.ts",
     "chrome:server": "ts-node src/plugins/chrome-history/server.ts",
     "chrome:push": "ts-node src/plugins/chrome-history/push.ts",
+    "transcript:process": "ts-node src/plugins/transcripts/process.ts",
+    "transcript:push": "ts-node src/plugins/transcripts/push.ts",
     "build": "tsc",
     "test": "echo \"Error: no test specified\" && exit 1"
   },

@@ -118,12 +118,31 @@ async function checkSyncthing(): Promise<boolean> {
   }
 }
 
-async function checkWhisperX(): Promise<boolean> {
+async function checkDocker(): Promise<boolean> {
   const { promisify } = await import('util');
   const execAsync = promisify(exec);
 
   try {
-    await execAsync('pip show whisperx');
+    await execAsync('docker --version');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function checkNvidiaDocker(): Promise<boolean> {
+  const { promisify } = await import('util');
+  const os = await import('os');
+  const execAsync = promisify(exec);
+
+  // Skip on macOS - Apple Silicon uses different GPU passthrough (no nvidia-container-toolkit needed)
+  if (os.platform() === 'darwin') {
+    return false;
+  }
+
+  try {
+    // Quick check: just see if nvidia-container-toolkit CLI exists
+    await execAsync('nvidia-ctk --version', { timeout: 5000 });
     return true;
   } catch {
     return false;
@@ -220,7 +239,8 @@ app.get('/', async (req, res) => {
   const daemonRunning = await checkDaemonRunning();
   const syncthingInstalled = await checkSyncthing();
   const tunnelStatus = await getTunnelStatusAsync();
-  const whisperXInstalled = await checkWhisperX();
+  const dockerInstalled = await checkDocker();
+  const nvidiaDockerInstalled = dockerInstalled ? await checkNvidiaDocker() : false;
   // Skip fetch on initial load to avoid SSH passphrase prompts - user can click "Check for Updates"
   const gitStatus = await checkForGitUpdates(true);
 
@@ -250,7 +270,8 @@ app.get('/', async (req, res) => {
       tunnelRunning: tunnelStatus.tunnelRunning,
       tunnelUrl: tunnelStatus.tunnelUrl,
       tunnelRoutes: tunnelPlugins,
-      whisperXInstalled,
+      dockerInstalled,
+      nvidiaDockerInstalled,
       updateAvailable: gitStatus.updateAvailable,
       currentCommit: gitStatus.currentCommit,
       remoteCommit: gitStatus.remoteCommit,
@@ -286,6 +307,7 @@ app.get('/', async (req, res) => {
     // Build data for template
     const data: Record<string, unknown> = {
       playwrightInstalled,
+      dockerInstalled,
       justSaved: savedSection === discovered.manifest.id,
     };
 
@@ -1366,9 +1388,10 @@ app.post('/tunnel/start-token', async (req, res) => {
   res.json(result);
 });
 
-app.get('/dependencies/check-whisperx', async (req, res) => {
-  const installed = await checkWhisperX();
-  res.json({ installed });
+app.get('/dependencies/check-docker', async (req, res) => {
+  const dockerInstalled = await checkDocker();
+  const nvidiaDockerInstalled = dockerInstalled ? await checkNvidiaDocker() : false;
+  res.json({ dockerInstalled, nvidiaDockerInstalled });
 });
 
 app.get('/status', (req, res) => {
