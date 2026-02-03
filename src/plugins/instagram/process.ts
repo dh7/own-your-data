@@ -1,15 +1,16 @@
 /**
- * Instagram PROCESS script - Generate viewer and markdown files
+ * Instagram PROCESS script - Generate MindCache files per day + viewer
  * Run: npm run instagram:process
  *
  * Reads raw JSON dumps and generates:
- * - One .md file per account with all posts
- * - A viewer.html for browsing posts visually
+ * - One .md file per day with all posts from that day
+ * - A viewer.html for browsing posts visually (per account)
  * - Copies images to connector_data/instagram/images/
  */
 
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import { MindCache } from 'mindcache';
 import { loadConfig, getResolvedPaths } from '../../config/config';
 import { InstagramPluginConfig, DEFAULT_CONFIG } from './config';
 
@@ -58,52 +59,7 @@ function cleanCaption(caption: string): string {
     return cleaned;
 }
 
-import { MindCache } from 'mindcache';
 
-function generateMarkdown(username: string, posts: InstaPost[]): string {
-    const mindcache = new MindCache();
-
-    const sortedPosts = [...posts].sort((a, b) => {
-        const dateA = a.date ? new Date(a.date).getTime() : 0;
-        const dateB = b.date ? new Date(b.date).getTime() : 0;
-        return dateB - dateA;
-    });
-
-    for (const post of sortedPosts) {
-        const dateStr = formatDate(post.date) || 'Unknown date';
-        const dateIso = post.date ? new Date(post.date).toISOString().split('T')[0] : 'unknown';
-        const caption = cleanCaption(post.caption);
-        const imagePath = post.id ? `./images/${username}/${post.id}.jpg` : '';
-
-        // Generate content similar to manual markdown but structured for MindCache
-        // We will store the full visual representation as the value (since it's rich text/markdown)
-        const contentLines = [];
-        if (imagePath) contentLines.push(`![Post](${imagePath})`);
-        if (caption) contentLines.push(caption);
-        contentLines.push(`❤️ ${post.likes} likes`);
-        contentLines.push(`[View on Instagram](${post.url})`);
-
-        const value = contentLines.join('\n\n');
-
-        // Use post ID or date as key. Since date isn't unique, append ID or index.
-        const keyName = `${dateIso}_${post.id || Math.random().toString(36).substr(2, 9)}`;
-
-        mindcache.set_value(keyName, value, {
-            contentTags: ['instagram', `@${username}`, dateIso],
-            zIndex: post.likes || 0 // Use likes as z-index for interesting sorting? Or just 0.
-        });
-    }
-
-    // Add header info as a special meta entry or just rely on file name?
-    // MindCache `toMarkdown` generates a standard header.
-    // If we want the specific "Last updated" header, we can add a meta entry.
-    mindcache.set('meta_stats', JSON.stringify({
-        lastUpdated: new Date().toISOString().split('T')[0],
-        totalPosts: posts.length
-    }));
-
-    return mindcache.toMarkdown();
-}
 
 function generateViewerHTML(username: string, posts: InstaPost[]): string {
     return `<!DOCTYPE html>
@@ -450,7 +406,7 @@ async function copyImages(
 }
 
 async function main() {
-    console.log('📸 Instagram Process - Generating viewer and markdown files\n');
+    console.log('📸 Instagram Process - Generating MindCache files per day\n');
 
     const config = await loadConfig();
     const paths = getResolvedPaths(config);
@@ -474,11 +430,15 @@ async function main() {
     await fs.mkdir(outputDir, { recursive: true });
     await fs.mkdir(imagesOutputDir, { recursive: true });
 
-    let totalPosts = 0;
+    // Collect all posts from all accounts, grouped by date
+    // Map: dateStr -> Map: username -> posts[]
+    const postsByDate = new Map<string, Map<string, InstaPost[]>>();
+    const allPostsByUsername = new Map<string, InstaPost[]>();
+
     let totalImages = 0;
 
     for (const username of accounts) {
-        console.log(`\n📄 Processing @${username}...`);
+        console.log(`   📥 Loading @${username}...`);
 
         const dumpPath = path.join(rawDumpsDir, `${username}.json`);
 
@@ -487,26 +447,35 @@ async function main() {
             const data = await fs.readFile(dumpPath, 'utf-8');
             posts = JSON.parse(data);
         } catch {
-            console.log(`   ⚠️ No data found for @${username}`);
+            console.log(`      ⚠️ No data found for @${username}`);
             continue;
         }
 
         if (posts.length === 0) {
-            console.log(`   ⚠️ No posts for @${username}`);
+            console.log(`      ⚠️ No posts for @${username}`);
             continue;
         }
 
-        // Generate markdown file
-        const markdown = generateMarkdown(username, posts);
-        const mdPath = path.join(outputDir, `instagram-${username}.md`);
-        await fs.writeFile(mdPath, markdown);
-        console.log(`   ✅ Generated ${path.basename(mdPath)} (${posts.length} posts)`);
+        allPostsByUsername.set(username, posts);
 
-        // Generate viewer HTML
-        const viewerHtml = generateViewerHTML(username, posts);
-        const htmlPath = path.join(outputDir, `viewer-${username}.html`);
-        await fs.writeFile(htmlPath, viewerHtml);
-        console.log(`   ✅ Generated ${path.basename(htmlPath)}`);
+        // Group posts by date
+        for (const post of posts) {
+            if (!post.date) continue;
+
+            const dateStr = new Date(post.date).toISOString().split('T')[0];
+
+            if (!postsByDate.has(dateStr)) {
+                postsByDate.set(dateStr, new Map());
+            }
+            const dayMap = postsByDate.get(dateStr)!;
+
+            if (!dayMap.has(username)) {
+                dayMap.set(username, []);
+            }
+            dayMap.get(username)!.push(post);
+        }
+
+        console.log(`      ✅ Loaded ${posts.length} posts`);
 
         // Copy images
         const imagesCopied = await copyImages(
@@ -514,14 +483,77 @@ async function main() {
             imagesOutputDir,
             username
         );
-        console.log(`   ✅ Copied ${imagesCopied} images`);
-
-        totalPosts += posts.length;
+        console.log(`      ✅ Copied ${imagesCopied} images`);
         totalImages += imagesCopied;
+
+        // Generate viewer HTML per account
+        const viewerHtml = generateViewerHTML(username, posts);
+        const htmlPath = path.join(outputDir, `viewer-${username}.html`);
+        await fs.writeFile(htmlPath, viewerHtml);
+        console.log(`      ✅ Generated ${path.basename(htmlPath)}`);
+    }
+
+    if (postsByDate.size === 0) {
+        console.log('\n⚠️ No posts found.');
+        return;
+    }
+
+    let totalPosts = 0;
+    let filesGenerated = 0;
+
+    // Generate one MindCache file per day
+    for (const [dateStr, usersMap] of postsByDate) {
+        const mindcache = new MindCache();
+        let dayPostCount = 0;
+
+        for (const [username, posts] of usersMap) {
+            // Sort posts by time
+            posts.sort((a, b) => {
+                const dateA = a.date ? new Date(a.date).getTime() : 0;
+                const dateB = b.date ? new Date(b.date).getTime() : 0;
+                return dateA - dateB;
+            });
+
+            // Build content for this user on this day
+            const contentLines: string[] = [];
+            contentLines.push(`# @${username} - ${dateStr}`);
+            contentLines.push('');
+
+            for (const post of posts) {
+                const caption = cleanCaption(post.caption);
+                const imagePath = post.id ? `./images/${username}/${post.id}.jpg` : '';
+
+                if (imagePath) contentLines.push(`![Post](${imagePath})`);
+                if (caption) contentLines.push(caption);
+                contentLines.push(`❤️ ${post.likes} likes`);
+                contentLines.push(`[View on Instagram](${post.url})`);
+                contentLines.push('');
+            }
+
+            const content = contentLines.join('\n');
+
+            // Generate a clean username tag
+            const usernameTag = username.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+
+            mindcache.set_value(`@${username}`, content, {
+                contentTags: ['instagram', dateStr, usernameTag],
+                zIndex: 0
+            });
+
+            dayPostCount += posts.length;
+        }
+
+        // Write to file
+        const localPath = path.join(outputDir, `instagram-${dateStr}.md`);
+        await fs.writeFile(localPath, mindcache.toMarkdown(), 'utf-8');
+
+        totalPosts += dayPostCount;
+        filesGenerated++;
     }
 
     console.log(`\n📊 Summary:`);
     console.log(`   Accounts processed: ${accounts.length}`);
+    console.log(`   Days with posts: ${filesGenerated}`);
     console.log(`   Total posts: ${totalPosts}`);
     console.log(`   Total images: ${totalImages}`);
     console.log(`\n✨ Done! Files saved to: ${outputDir}`);

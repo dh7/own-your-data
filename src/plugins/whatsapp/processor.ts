@@ -157,13 +157,11 @@ export async function processRawDumps(config: AppConfig, daysToLookBack: number)
         const mindcache = new MindCache();
 
         for (const [key, conv] of Array.from(conversations)) {
-            const messageCount = conv.messages.length;
-            const lastTs = conv.messages[conv.messages.length - 1]?.timestamp || 0;
             const conversationTag = conv.displayName
                 .toLowerCase()
                 .replace(/[^a-z0-9]+/g, '-')
                 .replace(/^-|-$/g, '');
-            const contentTags = ['whatsapp', dateStr, conversationTag, `lastTs:${lastTs}`];
+            const contentTags = ['whatsapp', dateStr, conversationTag];
 
             // Build conversation content
             let content = `# ${conv.displayName} - ${dateStr}\n\n`;
@@ -173,7 +171,7 @@ export async function processRawDumps(config: AppConfig, daysToLookBack: number)
 
             mindcache.set_value(key, content, {
                 contentTags,
-                zIndex: messageCount,
+                zIndex: 0,
             });
         }
 

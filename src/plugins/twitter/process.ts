@@ -1,14 +1,15 @@
 /**
- * Twitter PROCESS script - Generate MindCache markdown files
+ * Twitter PROCESS script - Generate MindCache markdown files per day
  * Run: npm run twitter:process
  *
- * Reads raw JSON dumps and generates MindCache .md files
+ * Reads raw JSON dumps and generates one MindCache .md file per day.
+ * Tweets are grouped by their actual date.
  */
 
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { MindCache } from 'mindcache';
-import { loadConfig, getResolvedPaths, getTodayString } from '../../config/config';
+import { loadConfig, getResolvedPaths } from '../../config/config';
 import { TwitterPluginConfig, DEFAULT_CONFIG } from './config';
 
 interface Tweet {
@@ -26,60 +27,10 @@ interface Tweet {
     likeCount: number;
 }
 
-/**
- * Generate MindCache format from tweets - one entry per tweet
- */
-function generateMindCache(tweets: Tweet[], username: string, exportDate: string): string {
-    const mindcache = new MindCache();
 
-    // Register a simplified text type implicitly used by storing string values?
-    // Or just store as text. MindCache defaults handle text.
-
-    const sortedTweets = [...tweets].sort((a, b) => {
-        if (!a.date || !b.date) return 0;
-        return new Date(b.date).getTime() - new Date(a.date).getTime();
-    });
-
-    for (const tweet of sortedTweets) {
-        const dateObj = tweet.date ? new Date(tweet.date) : null;
-        const dateStr = dateObj ? dateObj.toISOString().split('T')[0] : 'unknown';
-        const timeStr = dateObj
-            ? dateObj.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })
-            : '??:??';
-
-        const keyName = `@${username} Tweets - ${dateStr} ${timeStr}`;
-        let content = tweet.content.replace(/\n/g, ' ');
-
-        if (tweet.isRetweet) {
-            content = `RT @${tweet.user.username}: ${content}`;
-        }
-
-        const stats = `♥${tweet.likeCount} ↻${tweet.retweetCount} 💬${tweet.replyCount}`;
-        const fullContent = `${content}\n  ${stats} [${tweet.url}]`;
-
-        const tags = [`twitter`, dateStr, `@${username}`];
-        if (tweet.isRetweet) tags.push('retweet');
-
-        // Use standard text type
-        mindcache.set_value(keyName, fullContent, {
-            contentTags: tags,
-            zIndex: 0
-        });
-    }
-
-    // Add header manually since MindCache toMarkdown might not add custom headers exactly as before?
-    // MindCache adds "# MindCache STM Export" by default.
-    // We just need to ensure the export date is there if we want it.
-    // The previous implementation added "Export Date: ...".
-    // MindCache `toMarkdown` produces the standard format.
-    // If we want the metadata header, we might need to handle it or accept the standard.
-    // Standard is fine.
-
-    return mindcache.toMarkdown();
-}
 
 async function main() {
-    console.log('🐦 Twitter Process - Generating MindCache files\n');
+    console.log('🐦 Twitter Process - Generating MindCache files per day\n');
 
     const config = await loadConfig();
     const paths = getResolvedPaths(config);
@@ -101,11 +52,14 @@ async function main() {
 
     await fs.mkdir(outputDir, { recursive: true });
 
-    const today = getTodayString();
-    let totalTweets = 0;
+    console.log(`📅 Processing all available tweets...`);
+
+    // Collect all tweets from all accounts, grouped by date
+    // Map: dateStr -> Map: username -> tweets[]
+    const tweetsByDate = new Map<string, Map<string, Tweet[]>>();
 
     for (const username of accounts) {
-        console.log(`\n📄 Processing @${username}...`);
+        console.log(`   📥 Loading @${username}...`);
 
         const rawPath = path.join(rawDumpsDir, `${username}.json`);
 
@@ -114,26 +68,102 @@ async function main() {
             const data = await fs.readFile(rawPath, 'utf-8');
             tweets = JSON.parse(data);
         } catch {
-            console.log(`   ⚠️ No raw data found for @${username}`);
+            console.log(`      ⚠️ No raw data found for @${username}`);
             continue;
         }
 
         if (tweets.length === 0) {
-            console.log(`   ⚠️ No tweets for @${username}`);
+            console.log(`      ⚠️ No tweets for @${username}`);
             continue;
         }
 
-        // Generate MindCache markdown
-        const mindCacheContent = generateMindCache(tweets, username, today);
-        const mdPath = path.join(outputDir, `twitter-${username}.md`);
-        await fs.writeFile(mdPath, mindCacheContent);
-        console.log(`   ✅ Generated ${path.basename(mdPath)} (${tweets.length} tweets)`);
+        // Group tweets by date
+        for (const tweet of tweets) {
+            if (!tweet.date) continue;
 
-        totalTweets += tweets.length;
+            const dateStr = new Date(tweet.date).toISOString().split('T')[0];
+
+            if (!tweetsByDate.has(dateStr)) {
+                tweetsByDate.set(dateStr, new Map());
+            }
+            const dayMap = tweetsByDate.get(dateStr)!;
+
+            if (!dayMap.has(username)) {
+                dayMap.set(username, []);
+            }
+            dayMap.get(username)!.push(tweet);
+        }
+
+        console.log(`      ✅ Loaded ${tweets.length} tweets`);
+    }
+
+    if (tweetsByDate.size === 0) {
+        console.log('\n⚠️ No tweets found for the configured date range.');
+        return;
+    }
+
+    let totalTweets = 0;
+    let filesGenerated = 0;
+
+    // Generate one MindCache file per day
+    for (const [dateStr, usersMap] of tweetsByDate) {
+        const mindcache = new MindCache();
+        let dayTweetCount = 0;
+
+        for (const [username, tweets] of usersMap) {
+            // Sort tweets by time
+            tweets.sort((a, b) => {
+                if (!a.date || !b.date) return 0;
+                return new Date(a.date).getTime() - new Date(b.date).getTime();
+            });
+
+            // Build content for this user on this day
+            const contentLines: string[] = [];
+            contentLines.push(`# @${username} - ${dateStr}`);
+            contentLines.push('');
+
+            for (const tweet of tweets) {
+                const dateObj = tweet.date ? new Date(tweet.date) : null;
+                const timeStr = dateObj
+                    ? dateObj.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })
+                    : '??:??';
+
+                let content = tweet.content.replace(/\n/g, ' ').trim();
+                if (tweet.isRetweet && tweet.user) {
+                    content = `RT @${tweet.user.username}: ${content}`;
+                }
+
+                const stats = `♥${tweet.likeCount} ↻${tweet.retweetCount} 💬${tweet.replyCount}`;
+                contentLines.push(`*${timeStr}* ${content}`);
+                contentLines.push(`${stats} [link](${tweet.url})`);
+                contentLines.push('');
+            }
+
+            const content = contentLines.join('\n');
+
+            // Generate a clean username tag
+            const usernameTag = username.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+
+            mindcache.set_value(`@${username}`, content, {
+                contentTags: ['twitter', dateStr, usernameTag],
+                zIndex: 0
+            });
+
+            dayTweetCount += tweets.length;
+        }
+
+        // Write to file
+        const localPath = path.join(outputDir, `twitter-${dateStr}.md`);
+        await fs.writeFile(localPath, mindcache.toMarkdown(), 'utf-8');
+
+        console.log(`   📅 ${dateStr}: ${dayTweetCount} tweets from ${usersMap.size} accounts`);
+        totalTweets += dayTweetCount;
+        filesGenerated++;
     }
 
     console.log(`\n📊 Summary:`);
     console.log(`   Accounts processed: ${accounts.length}`);
+    console.log(`   Days with tweets: ${filesGenerated}`);
     console.log(`   Total tweets: ${totalTweets}`);
     console.log(`\n✨ Done! Files saved to: ${outputDir}`);
 }

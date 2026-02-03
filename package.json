@@ -26,6 +26,7 @@
     "gcontact:push": "ts-node src/plugins/google-contacts/push.ts",
     "openai:process": "ts-node src/plugins/openai/process.ts",
     "openai:push": "ts-node src/plugins/openai/push.ts",
+    "chrome:process": "ts-node src/plugins/chrome-history/process.ts",
     "chrome:server": "ts-node src/plugins/chrome-history/server.ts",
     "chrome:push": "ts-node src/plugins/chrome-history/push.ts",
     "transcript:process": "ts-node src/plugins/transcripts/process.ts",
