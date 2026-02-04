@@ -13,6 +13,17 @@ import * as path from 'path';
 import { loadConfig } from '../config/config';
 import { discoverPlugins, DiscoveredPlugin } from '../plugins';
 import { resolveSchedulerPluginConfig } from './config';
+import {
+    logSchedulerStart,
+    logServerStart,
+    logServerStop,
+    logServerOutput,
+    logCommandStart,
+    logCommandEnd,
+    logCommandOutput,
+    logPluginJobStart,
+    closeLogger,
+} from './logger';
 
 interface PluginRuntimeState {
     running: boolean;
@@ -80,30 +91,52 @@ async function removePidFile(): Promise<void> {
     }
 }
 
-async function runCommand(name: string, command: string): Promise<boolean> {
+async function runCommand(name: string, command: string, pluginId: string, commandId: string): Promise<boolean> {
     if (!command || command.trim().length === 0) {
         return true;
     }
+
+    const startTime = Date.now();
+    await logCommandStart(pluginId, commandId, command);
 
     return new Promise((resolve) => {
         console.log(`🚀 ${name}: ${command}`);
         const child = spawn(command, {
             cwd: process.cwd(),
             shell: true,
-            stdio: 'inherit',
+            stdio: ['ignore', 'pipe', 'pipe'],
         });
 
-        child.on('close', (code) => {
+        // Capture stdout
+        child.stdout?.on('data', (data: Buffer) => {
+            const output = data.toString();
+            process.stdout.write(output); // Still show in console
+            void logCommandOutput(pluginId, commandId, output, false);
+        });
+
+        // Capture stderr
+        child.stderr?.on('data', (data: Buffer) => {
+            const output = data.toString();
+            process.stderr.write(output); // Still show in console
+            void logCommandOutput(pluginId, commandId, output, true);
+        });
+
+        child.on('close', async (code) => {
+            const duration = Date.now() - startTime;
             if (code === 0) {
+                await logCommandEnd(pluginId, commandId, true, duration);
                 resolve(true);
                 return;
             }
             console.error(`❌ ${name} failed with code ${code}`);
+            await logCommandEnd(pluginId, commandId, false, duration);
             resolve(false);
         });
 
-        child.on('error', (error) => {
+        child.on('error', async (error) => {
+            const duration = Date.now() - startTime;
             console.error(`❌ ${name} error: ${error.message}`);
+            await logCommandEnd(pluginId, commandId, false, duration);
             resolve(false);
         });
     });
@@ -121,12 +154,13 @@ async function runPluginJob(plugin: DiscoveredPlugin): Promise<void> {
     schedulerState.set(plugin.manifest.id, state);
 
     console.log(`\n📦 ${plugin.manifest.icon} ${plugin.manifest.name}: ${schedule.commands.join(' -> ')}`);
+    await logPluginJobStart(plugin.manifest.name, schedule.commands);
     for (const commandId of schedule.commands) {
         const command = plugin.manifest.commands[commandId];
         if (!command || command.trim().length === 0) {
             continue;
         }
-        const success = await runCommand(`${plugin.manifest.id}:${commandId}`, command);
+        const success = await runCommand(`${plugin.manifest.id}:${commandId}`, command, plugin.manifest.id, commandId);
         if (!success) break;
     }
 
@@ -149,16 +183,33 @@ function ensurePluginServer(plugin: DiscoveredPlugin): void {
     if (!command || command.trim().length === 0) return;
 
     console.log(`🧩 Starting server for ${plugin.manifest.name}: ${command}`);
+    void logServerStart(plugin.manifest.id, command);
+
     const child = spawn(command, {
         cwd: process.cwd(),
         shell: true,
-        stdio: 'inherit',
+        stdio: ['ignore', 'pipe', 'pipe'],
+    });
+
+    // Capture stdout
+    child.stdout?.on('data', (data: Buffer) => {
+        const output = data.toString();
+        process.stdout.write(output); // Still show in console
+        void logServerOutput(plugin.manifest.id, output, false);
+    });
+
+    // Capture stderr
+    child.stderr?.on('data', (data: Buffer) => {
+        const output = data.toString();
+        process.stderr.write(output); // Still show in console
+        void logServerOutput(plugin.manifest.id, output, true);
     });
 
     serviceProcesses.set(plugin.manifest.id, child);
     serviceCommandByPlugin.set(plugin.manifest.id, command);
 
     child.on('exit', () => {
+        void logServerStop(plugin.manifest.id);
         serviceProcesses.delete(plugin.manifest.id);
         const restartCommand = serviceCommandByPlugin.get(plugin.manifest.id);
         if (!restartCommand) return;
@@ -241,6 +292,7 @@ async function tick(plugins: DiscoveredPlugin[]): Promise<void> {
 async function main(): Promise<void> {
     console.log('🤖 Own Your Data - Scheduler Daemon');
     await writePidFile();
+    await logSchedulerStart();
 
     const plugins = await discoverPlugins();
     console.log(`📦 Loaded ${plugins.length} plugins for scheduling.`);
@@ -259,6 +311,7 @@ async function main(): Promise<void> {
 
 async function cleanupAndExit(code: number): Promise<void> {
     stopAllPluginServers();
+    await closeLogger();
     await removePidFile();
     process.exit(code);
 }
