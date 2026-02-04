@@ -20,7 +20,8 @@ import {
   loadConfig,
   saveConfig,
   getResolvedPaths,
-  setPluginConfig,
+  loadPluginConfig,
+  savePluginConfig,
   PluginConfig,
   SchedulerCommand,
   migrateConfigIfNeeded,
@@ -442,7 +443,10 @@ app.get('/', async (req, res) => {
     const plugin = await loadPluginModule(discovered.manifest.id);
     if (!plugin) continue;
 
-    const pluginConfig = (config.plugins?.[discovered.manifest.id] as PluginConfig | undefined) || plugin.getDefaultConfig();
+    // Load from config/{pluginId}.json, fall back to legacy config.plugins, then defaults
+    const pluginConfig = await loadPluginConfig(discovered.manifest.id) 
+      || (config.plugins?.[discovered.manifest.id] as PluginConfig | undefined) 
+      || plugin.getDefaultConfig();
     const schedulerConfig = resolveSchedulerPluginConfig(config, discovered);
     const availableCommands = getAvailableCommands(discovered);
     const scheduleText = availableCommands.length === 0
@@ -748,14 +752,15 @@ app.post('/plugin/:id', async (req, res) => {
       return;
     }
 
-    const config = await loadConfig();
-    const existingConfig = (config.plugins?.[pluginId] as PluginConfig | undefined) || {};
+    // Load existing config from config/{pluginId}.json
+    const existingConfig = await loadPluginConfig(pluginId) || {};
     const parsedPluginConfig = plugin.parseFormData(req.body) as PluginConfig;
     const pluginConfig = { ...existingConfig, ...parsedPluginConfig };
-    setPluginConfig(config, pluginId, pluginConfig);
-    await saveConfig(config);
+    
+    // Save to config/{pluginId}.json (new location)
+    await savePluginConfig(pluginId, pluginConfig);
 
-    console.log(`✅ ${plugin.manifest.name} config saved`);
+    console.log(`✅ ${plugin.manifest.name} config saved to config/${pluginId}.json`);
     res.redirect(`/?saved=${pluginId}`);
   } catch (e: any) {
     console.error(`Failed to save plugin ${pluginId}:`, e);
