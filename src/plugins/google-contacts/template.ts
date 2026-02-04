@@ -19,6 +19,7 @@ export function renderTemplate(
     const cfg = config as unknown as GoogleContactsPluginConfig;
     const folderName = cfg.folderName || DEFAULT_CONFIG.folderName;
     const githubPath = cfg.githubPath || DEFAULT_CONFIG.githubPath;
+    const enabled = cfg.enabled ?? DEFAULT_CONFIG.enabled;
 
     // Check if the CSV file exists
     const csvPath = path.join(process.cwd(), 'raw-dumps', folderName, 'contacts.csv');
@@ -34,7 +35,10 @@ export function renderTemplate(
 
     let statusClass = 'pending';
     let statusText = '⚠️ Setup needed';
-    if (lastProcessed) {
+    if (!enabled) {
+        statusClass = 'disconnected';
+        statusText = '⏸ Disabled';
+    } else if (lastProcessed) {
         statusClass = 'connected';
         statusText = `✅ Done on ${lastProcessed.toLocaleDateString()}`;
     } else if (fileExists) {
@@ -74,6 +78,13 @@ export function renderTemplate(
         `}
 
         <form action="/plugin/google-contacts" method="POST">
+            <div style="margin-bottom: 1rem; padding: 0.75rem; background: #0a0a0a; border: 1px solid #333; border-radius: 4px;">
+                <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer;">
+                    <input type="checkbox" name="enabled" ${enabled ? 'checked' : ''} />
+                    Enable plugin
+                </label>
+            </div>
+
             <div>
                 <label for="gcontact-folder-name">Raw Data Folder Name</label>
                 <input type="text" id="gcontact-folder-name" name="folderName"
@@ -110,7 +121,7 @@ export function renderTemplate(
  */
 export function parseFormData(body: Record<string, string>): GoogleContactsPluginConfig {
     return {
-        enabled: true,
+        enabled: body.enabled === 'on',
         folderName: body.folderName || DEFAULT_CONFIG.folderName,
         githubPath: body.githubPath || DEFAULT_CONFIG.githubPath,
     };

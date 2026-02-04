@@ -216,7 +216,7 @@ const server = http.createServer((req, res) => {
                     }
                 }
 
-                // Note: GitHub push happens on schedule via daemon (npm run get_all)
+                // Note: GitHub push happens on schedule via daemon (npm run scheduler)
                 // or manually via: npm run chrome:push
 
                 res.writeHead(200, { 'Content-Type': 'application/json' });

@@ -4,8 +4,10 @@
   "description": "Local-first data connectors with GitHub sync",
   "main": "dist/index.js",
   "scripts": {
+    "start": "ts-node src/start.ts",
     "config": "ts-node src/config/server.ts",
-    "get_all": "ts-node src/get_all.ts",
+    "scheduler": "ts-node src/scheduler/daemon.ts",
+    "get_all": "npm run scheduler",
     "process_all": "ts-node src/process_all.ts",
     "push_all": "ts-node src/push_all.ts",
     "push": "ts-node src/push.ts",

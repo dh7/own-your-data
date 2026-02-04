@@ -7,13 +7,9 @@
     "folder": "whatsapp",
     "scheduler": {
         "mode": "realtime",
-        "cmd": [
-            "push"
-        ]
+        "cmd": []
     },
     "commands": {
-        "get": "ts-node src/plugins/whatsapp/get.ts",
-        "process": "ts-node src/plugins/whatsapp/process.ts",
-        "push": "ts-node src/plugins/whatsapp/push.ts"
+        "server": "ts-node src/plugins/whatsapp/get.ts"
     }
 }

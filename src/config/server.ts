@@ -14,13 +14,25 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import { exec } from 'child_process';
 import multer from 'multer';
-import { saveGitHubConfig, loadGitHubConfig, loadConfig, saveConfig, getResolvedPaths, setPluginConfig } from './config';
+import {
+  saveGitHubConfig,
+  loadGitHubConfig,
+  loadConfig,
+  saveConfig,
+  getResolvedPaths,
+  setPluginConfig,
+  PluginConfig,
+  SchedulerCommand,
+  SchedulerPluginConfig,
+} from './config';
 import { useSingleFileAuthState } from '../shared/auth-utils';
-import { discoverPlugins, loadPluginModule } from '../plugins';
+import { discoverPlugins, loadPluginModule, DiscoveredPlugin } from '../plugins';
 
 // Templates
 import { renderLayout } from './templates/layout';
-import { renderSystemSection, renderPluginsDivider, TunnelRouteInfo } from './templates/system';
+import { renderSystemSection, TunnelRouteInfo } from './templates/system';
+import { renderSchedulerSection, SchedulerServiceStatus, SchedulerPluginEditor } from './templates/scheduler';
+import { renderPluginsHub, wrapPluginPanel, PluginSummary } from './templates/plugins';
 import { renderGitHubSection } from './templates/github';
 import { renderFileBrowserSection } from './templates/filebrowser';
 import { renderDomainSection, TunnelPluginInfo } from './templates/domain';
@@ -43,6 +55,7 @@ import {
   teardownTunnel,
 } from '../tunnel/cloudflare-api';
 import { PROXY_PORT } from '../tunnel/proxy';
+import { getAvailableCommands, resolveSchedulerPluginConfig } from '../scheduler/config';
 
 const app = express();
 const PORT = 3456;
@@ -97,10 +110,22 @@ async function checkInstagramAuth(paths: ReturnType<typeof getResolvedPaths>): P
 
 async function checkDaemonRunning(): Promise<boolean> {
   try {
-    const pidPath = path.join(process.cwd(), 'logs', 'get_all.pid');
-    await fs.access(pidPath);
-    // TODO: strictly we should check if process is alive, but existence is good enough for now
-    return true;
+    const pidPaths = ['scheduler.pid', 'get_all.pid'];
+    for (const pidFile of pidPaths) {
+      try {
+        const pidPath = path.join(process.cwd(), 'logs', pidFile);
+        const data = await fs.readFile(pidPath, 'utf-8');
+        const pid = parseInt(data.trim(), 10);
+        if (Number.isNaN(pid)) continue;
+        process.kill(pid, 0);
+        await fs.access(pidPath);
+        return true;
+      } catch {
+        // continue
+      }
+    }
+
+    return false;
   } catch {
     return false;
   }
@@ -116,6 +141,74 @@ async function checkSyncthing(): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+async function checkServiceHealth(url: string): Promise<boolean> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 1500);
+  try {
+    const response = await fetch(url, { signal: controller.signal });
+    return response.ok;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function getServicePidFile(serviceId: string): string {
+  return path.join(process.cwd(), 'logs', 'services', `${serviceId}.pid`);
+}
+
+async function ensureServicePidDir(): Promise<void> {
+  await fs.mkdir(path.join(process.cwd(), 'logs', 'services'), { recursive: true });
+}
+
+async function readServicePid(serviceId: string): Promise<number | null> {
+  try {
+    const data = await fs.readFile(getServicePidFile(serviceId), 'utf-8');
+    const pid = parseInt(data.trim(), 10);
+    return Number.isNaN(pid) ? null : pid;
+  } catch {
+    return null;
+  }
+}
+
+async function isServicePidAlive(serviceId: string): Promise<boolean> {
+  const pid = await readServicePid(serviceId);
+  if (!pid) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function startServiceByCommand(serviceId: string, command: string): Promise<void> {
+  if (await isServicePidAlive(serviceId)) return;
+
+  await ensureServicePidDir();
+  const { spawn } = await import('child_process');
+  const child = spawn(command, {
+    cwd: process.cwd(),
+    shell: true,
+    detached: true,
+    stdio: 'ignore',
+  });
+  child.unref();
+  await fs.writeFile(getServicePidFile(serviceId), String(child.pid), 'utf-8');
+}
+
+async function stopServiceByPid(serviceId: string): Promise<void> {
+  const pid = await readServicePid(serviceId);
+  if (!pid) return;
+  try {
+    process.kill(pid, 'SIGTERM');
+  } catch {
+    // ignore
+  }
+  await fs.unlink(getServicePidFile(serviceId)).catch(() => { });
 }
 
 async function checkDocker(): Promise<boolean> {
@@ -146,6 +239,87 @@ async function checkNvidiaDocker(): Promise<boolean> {
     return true;
   } catch {
     return false;
+  }
+}
+
+function describeSchedule(schedule: SchedulerPluginConfig): string {
+  if (!schedule.enabled) {
+    return '<span style="color:#8b949e">Disabled</span>';
+  }
+
+  if (schedule.cadence === 'fixed') {
+    if (!schedule.fixedTimes.length) {
+      return '<span style="color:#8b949e">No fixed times</span>';
+    }
+    return `Fixed: <strong>${schedule.fixedTimes.join(', ')}</strong>`;
+  }
+
+  return `Every <strong>${schedule.intervalHours}h</strong> ± ${schedule.jitterMinutes}m (${schedule.startHour}:00-${schedule.endHour}:00)`;
+}
+
+function extractPluginStatus(renderedHtml: string): {
+  text: string;
+  className: 'connected' | 'disconnected' | 'pending' | 'warning';
+} {
+  const match = renderedHtml.match(/<span class="status\s+([^"]+)">([\s\S]*?)<\/span>/i);
+  if (!match) {
+    return { text: 'Configured', className: 'pending' };
+  }
+
+  const classes = match[1].split(/\s+/).map(v => v.trim()).filter(Boolean);
+  const className = (['connected', 'disconnected', 'pending', 'warning'] as const).find(cls => classes.includes(cls)) || 'pending';
+  const text = match[2].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+
+  return { text: text || 'Configured', className };
+}
+
+function getPluginServiceId(pluginId: string): string {
+  return `${pluginId}-server`;
+}
+
+async function startSchedulerDaemonProcess(): Promise<void> {
+  if (await checkDaemonRunning()) return;
+  const { spawn } = await import('child_process');
+  const child = spawn('npm', ['run', 'scheduler'], {
+    cwd: process.cwd(),
+    detached: true,
+    stdio: 'ignore',
+  });
+  child.unref();
+}
+
+async function stopSchedulerDaemonProcess(): Promise<void> {
+  const pidPath = path.join(process.cwd(), 'logs', 'scheduler.pid');
+  const pidData = await fs.readFile(pidPath, 'utf-8');
+  const pid = parseInt(pidData.trim(), 10);
+  if (!pid) return;
+  process.kill(pid, 'SIGTERM');
+  await fs.unlink(pidPath).catch(() => { });
+}
+
+async function startAutoStartPluginServers(): Promise<void> {
+  const config = await loadConfig();
+  const plugins = await discoverPlugins();
+  for (const plugin of plugins) {
+    if (!plugin.manifest.commands.server || plugin.manifest.commands.server.trim().length === 0) {
+      continue;
+    }
+    const scheduler = resolveSchedulerPluginConfig(config, plugin);
+    if (!scheduler.enabled || !scheduler.autoStartServer) continue;
+    await startServiceByCommand(getPluginServiceId(plugin.manifest.id), plugin.manifest.commands.server);
+  }
+}
+
+async function stopAutoStartPluginServers(): Promise<void> {
+  const config = await loadConfig();
+  const plugins = await discoverPlugins();
+  for (const plugin of plugins) {
+    if (!plugin.manifest.commands.server || plugin.manifest.commands.server.trim().length === 0) {
+      continue;
+    }
+    const scheduler = resolveSchedulerPluginConfig(config, plugin);
+    if (!scheduler.autoStartServer) continue;
+    await stopServiceByPid(getPluginServiceId(plugin.manifest.id));
   }
 }
 
@@ -232,7 +406,10 @@ app.get('/', async (req, res) => {
   const githubConfig = await loadGitHubConfig();
   const config = await loadConfig();
   const paths = getResolvedPaths(config);
-  const savedSection = req.query.saved as string | undefined;
+  const rawSavedSection = req.query.saved as string | undefined;
+  const savedSection = rawSavedSection === 'daemon' || rawSavedSection === 'scheduler'
+    ? 'services'
+    : rawSavedSection;
 
   const playwright = await checkPlaywright();
   const playwrightInstalled = playwright.installed && playwright.browsers;
@@ -259,50 +436,42 @@ app.get('/', async (req, res) => {
       routeCount: p.manifest.tunnel!.routes.length,
     }));
 
-  // Build core sections first: System, Your Domain, File Browser, GitHub
-  const sections: string[] = [
-    renderSystemSection(config, plugins, {
-      playwrightInstalled: playwright.installed,
-      browsersInstalled: playwright.browsers,
-      daemonRunning,
-      syncthingInstalled,
-      cloudflaredInstalled: tunnelStatus.cloudflaredInstalled,
-      tunnelRunning: tunnelStatus.tunnelRunning,
-      tunnelUrl: tunnelStatus.tunnelUrl,
-      tunnelRoutes: tunnelPlugins,
-      dockerInstalled,
-      nvidiaDockerInstalled,
-      updateAvailable: gitStatus.updateAvailable,
-      currentCommit: gitStatus.currentCommit,
-      remoteCommit: gitStatus.remoteCommit,
-      commitsBehind: gitStatus.commitsBehind,
-    }, savedSection === 'system' || savedSection === 'storage' || savedSection === 'daemon'),
-    renderDomainSection(
-      {
-        cloudflaredInstalled: tunnelStatus.cloudflaredInstalled,
-        credentialsConfigured: tunnelStatus.credentialsConfigured,
-        tunnelConfigured: tunnelStatus.tunnelConfigured,
-        tunnelRunning: tunnelStatus.tunnelRunning,
-        tunnelUrl: tunnelStatus.tunnelUrl,
-        tunnelConfig: tunnelStatus.tunnelConfig,
-      },
-      tunnelPlugins,
-      savedSection === 'domain'
-    ),
-    renderFileBrowserSection(),
-    renderGitHubSection(githubConfig, savedSection === 'github'),
-  ];
-
-  // Add title-style divider before plugins
-  sections.push(renderPluginsDivider());
-
-
+  const pluginSummaries: PluginSummary[] = [];
+  const pluginPanels: string[] = [];
+  const pluginScheduleRows: SchedulerPluginEditor[] = [];
 
   for (const discovered of plugins) {
     const plugin = await loadPluginModule(discovered.manifest.id);
     if (!plugin) continue;
 
-    const pluginConfig = config.plugins?.[discovered.manifest.id] || plugin.getDefaultConfig();
+    const pluginConfig = (config.plugins?.[discovered.manifest.id] as PluginConfig | undefined) || plugin.getDefaultConfig();
+    const schedulerConfig = resolveSchedulerPluginConfig(config, discovered);
+    const availableCommands = getAvailableCommands(discovered);
+    const scheduleText = availableCommands.length === 0
+      ? (schedulerConfig.enabled
+        ? '<span style="color:#8b949e">Server managed</span>'
+        : '<span style="color:#8b949e">Disabled</span>')
+      : describeSchedule(schedulerConfig);
+
+    if (discovered.manifest.scheduler.mode === 'interval') {
+      pluginScheduleRows.push({
+        id: discovered.manifest.id,
+        name: discovered.manifest.name,
+        icon: discovered.manifest.icon,
+        enabled: schedulerConfig.enabled,
+        cadence: schedulerConfig.cadence,
+        startHour: schedulerConfig.startHour,
+        endHour: schedulerConfig.endHour,
+        intervalHours: schedulerConfig.intervalHours,
+        jitterMinutes: schedulerConfig.jitterMinutes,
+        fixedTimes: schedulerConfig.fixedTimes,
+        commands: schedulerConfig.commands,
+        availableCommands,
+        autoStartServer: schedulerConfig.autoStartServer,
+        hasServer: typeof discovered.manifest.commands.server === 'string' && discovered.manifest.commands.server.trim().length > 0,
+        scheduleText,
+      });
+    }
 
     // Build data for template
     const data: Record<string, unknown> = {
@@ -321,15 +490,128 @@ app.get('/', async (req, res) => {
     }
 
     try {
-      sections.push(plugin.renderTemplate(pluginConfig, data));
+      const rendered = plugin.renderTemplate(pluginConfig, data);
+      const pluginStatus = extractPluginStatus(rendered);
+      pluginSummaries.push({
+        id: discovered.manifest.id,
+        name: discovered.manifest.name,
+        icon: discovered.manifest.icon,
+        description: discovered.manifest.description,
+        statusText: pluginStatus.text,
+        statusClass: pluginStatus.className,
+        scheduleText,
+      });
+      pluginPanels.push(wrapPluginPanel(discovered.manifest.id, discovered.manifest.name, discovered.manifest.icon, rendered));
     } catch (e) {
       console.error(`Failed to render plugin ${discovered.manifest.id}:`, e);
     }
   }
 
+  const schedulerServices: SchedulerServiceStatus[] = [
+    {
+      id: 'config-server',
+      name: 'Config Server',
+      icon: '🧩',
+      running: true,
+      description: 'This configuration UI',
+      detail: `Port ${PORT}`,
+      actions: [{ action: 'restart', label: 'Restart', style: 'secondary' }],
+    },
+    {
+      id: 'daemon',
+      name: 'Scheduler Daemon',
+      icon: '🤖',
+      running: daemonRunning,
+      description: 'Runs npm run scheduler',
+      detail: daemonRunning ? 'PID file present' : 'Not running',
+      actions: daemonRunning
+        ? [
+          { action: 'restart', label: 'Restart', style: 'secondary' },
+          { action: 'stop', label: 'Stop', style: 'danger' },
+        ]
+        : [{ action: 'start', label: 'Start' }],
+    },
+  ];
 
+  for (const plugin of plugins) {
+    const serverCommand = plugin.manifest.commands.server;
+    if (!serverCommand || serverCommand.trim().length === 0) continue;
 
-  res.send(renderLayout(sections));
+    const serviceId = getPluginServiceId(plugin.manifest.id);
+    let running = await isServicePidAlive(serviceId);
+
+    if (!running && plugin.manifest.tunnel?.enabled) {
+      const healthRoute = plugin.manifest.tunnel.routes.find(route => route.path === '/health' && route.auth === false);
+      if (healthRoute) {
+        running = await checkServiceHealth(`http://127.0.0.1:${plugin.manifest.tunnel.port}${healthRoute.path}`);
+      }
+    }
+
+    const detail = plugin.manifest.tunnel?.enabled
+      ? `Port ${plugin.manifest.tunnel.port}`
+      : 'No health endpoint configured';
+
+    schedulerServices.push({
+      id: serviceId,
+      name: `${plugin.manifest.name} Server`,
+      icon: plugin.manifest.icon,
+      running,
+      description: 'Plugin-managed background service',
+      detail,
+      actions: running
+        ? [
+          { action: 'restart', label: 'Restart', style: 'secondary' },
+          { action: 'stop', label: 'Stop', style: 'danger' },
+        ]
+        : [{ action: 'start', label: 'Start' }],
+    });
+  }
+
+  const sections: string[] = [
+    renderSchedulerSection({
+      daemonRunning,
+      services: schedulerServices,
+      plugins: pluginScheduleRows,
+    }, savedSection === 'services'),
+    renderSystemSection(config, {
+      playwrightInstalled: playwright.installed,
+      browsersInstalled: playwright.browsers,
+      daemonRunning,
+      syncthingInstalled,
+      cloudflaredInstalled: tunnelStatus.cloudflaredInstalled,
+      tunnelRunning: tunnelStatus.tunnelRunning,
+      tunnelUrl: tunnelStatus.tunnelUrl,
+      tunnelRoutes: tunnelPlugins,
+      dockerInstalled,
+      nvidiaDockerInstalled,
+      updateAvailable: gitStatus.updateAvailable,
+      currentCommit: gitStatus.currentCommit,
+      remoteCommit: gitStatus.remoteCommit,
+      commitsBehind: gitStatus.commitsBehind,
+    }, savedSection === 'system' || savedSection === 'storage'),
+    renderDomainSection(
+      {
+        cloudflaredInstalled: tunnelStatus.cloudflaredInstalled,
+        credentialsConfigured: tunnelStatus.credentialsConfigured,
+        tunnelConfigured: tunnelStatus.tunnelConfigured,
+        tunnelRunning: tunnelStatus.tunnelRunning,
+        tunnelUrl: tunnelStatus.tunnelUrl,
+        tunnelConfig: tunnelStatus.tunnelConfig,
+      },
+      tunnelPlugins,
+      savedSection === 'domain'
+    ),
+    renderFileBrowserSection(),
+    renderGitHubSection(githubConfig, savedSection === 'github'),
+    renderPluginsHub(pluginSummaries),
+  ];
+
+  const initialPluginPanel = pluginSummaries.some(p => p.id === savedSection) ? savedSection : undefined;
+
+  res.send(renderLayout(sections, {
+    modals: pluginPanels,
+    initialPluginPanel,
+  }));
 });
 
 // Save storage config
@@ -363,7 +645,63 @@ app.post('/daemon', async (req, res) => {
 
   await saveConfig(config);
   console.log('✅ Daemon config saved');
-  res.redirect('/?saved=daemon');
+  res.redirect('/?saved=services');
+});
+
+app.post('/scheduler/plugin/:id', async (req, res) => {
+  const pluginId = req.params.id;
+  const config = await loadConfig();
+  const plugins = await discoverPlugins();
+  const plugin = plugins.find(p => p.manifest.id === pluginId);
+
+  if (!plugin) {
+    res.status(404).send(`Plugin not found: ${pluginId}`);
+    return;
+  }
+
+  const existing = resolveSchedulerPluginConfig(config, plugin);
+  const rawCommands = req.body.commands;
+  const commandList = Array.isArray(rawCommands)
+    ? rawCommands
+    : typeof rawCommands === 'string'
+      ? [rawCommands]
+      : [];
+
+  const availableCommands = getAvailableCommands(plugin);
+  const commands = commandList
+    .map((value: string) => value as SchedulerCommand)
+    .filter(command => availableCommands.includes(command));
+
+  const fixedTimes = typeof req.body.fixedTimes === 'string'
+    ? req.body.fixedTimes
+      .split(',')
+      .map((value: string) => value.trim())
+      .filter((value: string) => /^\d{1,2}:\d{2}$/.test(value))
+      .map((value: string) => {
+        const [hours, minutes] = value.split(':');
+        return `${hours.padStart(2, '0')}:${minutes}`;
+      })
+    : [];
+
+  const nextConfig: SchedulerPluginConfig = {
+    enabled: req.body.enabled === 'on',
+    cadence: req.body.cadence === 'fixed' ? 'fixed' : 'interval',
+    startHour: Math.min(23, Math.max(0, parseInt(req.body.startHour, 10) || existing.startHour)),
+    endHour: Math.min(24, Math.max(1, parseInt(req.body.endHour, 10) || existing.endHour)),
+    intervalHours: Math.min(168, Math.max(1, parseInt(req.body.intervalHours, 10) || existing.intervalHours)),
+    jitterMinutes: Math.min(180, Math.max(0, parseInt(req.body.jitterMinutes, 10) || existing.jitterMinutes)),
+    fixedTimes,
+    commands: commands.length > 0 ? commands : existing.commands,
+    autoStartServer: req.body.autoStartServer === 'on',
+  };
+
+  if (!config.schedulerConfig) {
+    config.schedulerConfig = { plugins: {} };
+  }
+  config.schedulerConfig.plugins[pluginId] = nextConfig;
+  await saveConfig(config);
+
+  res.redirect('/?saved=services');
 });
 
 
@@ -393,7 +731,9 @@ app.post('/plugin/:id', async (req, res) => {
     }
 
     const config = await loadConfig();
-    const pluginConfig = plugin.parseFormData(req.body);
+    const existingConfig = (config.plugins?.[pluginId] as PluginConfig | undefined) || {};
+    const parsedPluginConfig = plugin.parseFormData(req.body) as PluginConfig;
+    const pluginConfig = { ...existingConfig, ...parsedPluginConfig };
     setPluginConfig(config, pluginId, pluginConfig);
     await saveConfig(config);
 
@@ -1156,15 +1496,8 @@ app.post('/system/start-daemon', async (req, res) => {
   console.log('▶️ Starting daemon...');
 
   try {
-    const { spawn } = await import('child_process');
-
-    // Start daemon in background
-    const child = spawn('npm', ['run', 'get_all'], {
-      cwd: process.cwd(),
-      detached: true,
-      stdio: 'ignore'
-    });
-    child.unref();
+    await startSchedulerDaemonProcess();
+    await startAutoStartPluginServers();
 
     res.json({ success: true, message: 'Daemon started!' });
   } catch (e: any) {
@@ -1177,17 +1510,9 @@ app.post('/system/stop-daemon', async (req, res) => {
   console.log('⏹️ Stopping daemon...');
 
   try {
-    const pidPath = path.join(process.cwd(), 'logs', 'get_all.pid');
-    const pidData = await fs.readFile(pidPath, 'utf-8');
-    const pid = parseInt(pidData.trim());
-
-    if (pid) {
-      process.kill(pid, 'SIGTERM');
-      await fs.unlink(pidPath).catch(() => { });
-      res.json({ success: true, message: 'Daemon stopped!' });
-    } else {
-      res.json({ success: false, error: 'Invalid PID' });
-    }
+    await stopSchedulerDaemonProcess();
+    await stopAutoStartPluginServers();
+    res.json({ success: true, message: 'Daemon stopped!' });
   } catch (e: any) {
     console.error('❌ Failed to stop daemon:', e.message);
     res.json({ success: false, error: e.message });
@@ -1198,32 +1523,89 @@ app.post('/system/restart-daemon', async (req, res) => {
   console.log('🔄 Restarting daemon...');
 
   try {
-    // First stop
-    const pidPath = path.join(process.cwd(), 'logs', 'get_all.pid');
     try {
-      const pidData = await fs.readFile(pidPath, 'utf-8');
-      const pid = parseInt(pidData.trim());
-      if (pid) {
-        process.kill(pid, 'SIGTERM');
-        await fs.unlink(pidPath).catch(() => { });
-      }
-    } catch { }
-
-    // Wait a bit
+      await stopSchedulerDaemonProcess();
+    } catch {
+      // ignore stop failures
+    }
+    await stopAutoStartPluginServers();
     await new Promise(resolve => setTimeout(resolve, 1000));
-
-    // Then start
-    const { spawn } = await import('child_process');
-    const child = spawn('npm', ['run', 'get_all'], {
-      cwd: process.cwd(),
-      detached: true,
-      stdio: 'ignore'
-    });
-    child.unref();
+    await startSchedulerDaemonProcess();
+    await startAutoStartPluginServers();
 
     res.json({ success: true, message: 'Daemon restarted!' });
   } catch (e: any) {
     console.error('❌ Failed to restart daemon:', e.message);
+    res.json({ success: false, error: e.message });
+  }
+});
+
+app.post('/system/service/:id/:action', async (req, res) => {
+  const serviceId = req.params.id;
+  const action = req.params.action as 'start' | 'stop' | 'restart';
+
+  if (!['start', 'stop', 'restart'].includes(action)) {
+    res.status(400).json({ success: false, error: 'Invalid action' });
+    return;
+  }
+
+  try {
+    if (serviceId === 'daemon') {
+      if (action === 'start') {
+        await startSchedulerDaemonProcess();
+        await startAutoStartPluginServers();
+      } else if (action === 'stop') {
+        await stopSchedulerDaemonProcess();
+        await stopAutoStartPluginServers();
+      } else {
+        try {
+          await stopSchedulerDaemonProcess();
+        } catch {
+          // ignore
+        }
+        await stopAutoStartPluginServers();
+        await new Promise(resolve => setTimeout(resolve, 600));
+        await startSchedulerDaemonProcess();
+        await startAutoStartPluginServers();
+      }
+
+      res.json({ success: true, message: `Daemon ${action} complete` });
+      return;
+    }
+
+    if (serviceId === 'whatsapp') {
+      await checkOrStartWhatsApp();
+      res.json({ success: true, message: 'WhatsApp reconnect requested' });
+      return;
+    }
+
+    if (!serviceId.endsWith('-server')) {
+      res.status(404).json({ success: false, error: 'Unknown service id' });
+      return;
+    }
+
+    const pluginId = serviceId.slice(0, -'-server'.length);
+    const plugins = await discoverPlugins();
+    const plugin = plugins.find(p => p.manifest.id === pluginId);
+    const command = plugin?.manifest.commands.server;
+
+    if (!plugin || !command || command.trim().length === 0) {
+      res.status(404).json({ success: false, error: 'Service command not found' });
+      return;
+    }
+
+    if (action === 'start') {
+      await startServiceByCommand(serviceId, command);
+    } else if (action === 'stop') {
+      await stopServiceByPid(serviceId);
+    } else {
+      await stopServiceByPid(serviceId);
+      await new Promise(resolve => setTimeout(resolve, 400));
+      await startServiceByCommand(serviceId, command);
+    }
+
+    res.json({ success: true, message: `${plugin.manifest.name} server ${action} complete` });
+  } catch (e: any) {
     res.json({ success: false, error: e.message });
   }
 });

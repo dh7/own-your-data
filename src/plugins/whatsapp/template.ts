@@ -18,9 +18,10 @@ export function renderTemplate(
     const githubPath = cfg.githubPath || DEFAULT_CONFIG.githubPath;
     const enabled = cfg.enabled ?? DEFAULT_CONFIG.enabled;
 
-    const statusClass = data.isLoggedIn ? 'connected' : 'pending';
-    const statusText = data.isLoggedIn ? '✅ Connected' :
-        (data.status === 'checking' ? '🔍 Checking...' : '⏳ Scan QR');
+    const statusClass = !enabled ? 'disconnected' : (data.isLoggedIn ? 'connected' : 'pending');
+    const statusText = !enabled
+        ? '⏸ Disabled'
+        : (data.isLoggedIn ? '✅ Connected' : (data.status === 'checking' ? '🔍 Checking...' : '⏳ Scan QR'));
 
     return `
 <details${data.justSaved ? ' open' : ''}>
@@ -76,15 +77,20 @@ export function renderTemplate(
         <div class="info-box" style="margin: 1.5rem 0; padding: 1rem; background: #2a2a1a; border: 1px solid #4a4a2a; border-radius: 4px;">
             <strong>📱 Real-time Listener</strong>
             <p style="margin: 0.5rem 0 0 0; color: #8b949e; font-size: 0.9rem;">
-                WhatsApp runs as a real-time listener. It cannot be scheduled automatically.
+                WhatsApp runs continuously while the listener process is active.
             </p>
             <p style="margin: 0.5rem 0 0 0; color: #8b949e; font-size: 0.85rem;">
-                Run <code>npm run whatsapp:get</code> separately to start collecting messages.
+                Managed as a service. The command is <code>npm run whatsapp:get</code>.
             </p>
         </div>
 
         <form action="/plugin/whatsapp" method="POST">
-            <input type="hidden" name="enabled" value="${enabled ? 'on' : 'off'}" />
+            <div style="margin-bottom: 1rem; padding: 0.75rem; background: #0a0a0a; border: 1px solid #333; border-radius: 4px;">
+                <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer;">
+                    <input type="checkbox" name="enabled" ${enabled ? 'checked' : ''} />
+                    Enable plugin
+                </label>
+            </div>
 
             <div>
                 <label for="whatsapp-github-path">GitHub Output Path</label>
@@ -100,9 +106,7 @@ export function renderTemplate(
 
         <p style="color: #666; font-size: 0.9rem;">
             <strong>Commands:</strong><br>
-            <code style="background: #f5f5f5; padding: 0.25rem 0.5rem; border-radius: 4px;">npm run whatsapp:get</code> - Collect messages<br>
-            <code style="background: #f5f5f5; padding: 0.25rem 0.5rem; border-radius: 4px;">npm run whatsapp:process</code> - Process raw data<br>
-            <code style="background: #f5f5f5; padding: 0.25rem 0.5rem; border-radius: 4px;">npm run whatsapp:push</code> - Sync to GitHub
+            <code style="background: #f5f5f5; padding: 0.25rem 0.5rem; border-radius: 4px;">npm run whatsapp:get</code> - Start WhatsApp listener server
         </p>
     </div>
 </details>

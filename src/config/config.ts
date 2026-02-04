@@ -30,11 +30,33 @@ export interface GitHubConfig {
  * Base plugin configuration (all plugins share these fields)
  */
 export interface PluginConfig {
-    enabled: boolean;
+    /** Legacy per-plugin scheduler toggle (deprecated; use schedulerConfig) */
+    enabled?: boolean;
+    /** Legacy per-plugin interval setting (deprecated; use schedulerConfig) */
     intervalHours?: number;
+    /** Legacy per-plugin jitter setting (deprecated; use schedulerConfig) */
     randomMinutes?: number;
     githubPath?: string;
     [key: string]: unknown;
+}
+
+export type SchedulerCadence = 'interval' | 'fixed';
+export type SchedulerCommand = 'get' | 'process' | 'push';
+
+export interface SchedulerPluginConfig {
+    enabled: boolean;
+    cadence: SchedulerCadence;
+    startHour: number;
+    endHour: number;
+    intervalHours: number;
+    jitterMinutes: number;
+    fixedTimes: string[];
+    commands: SchedulerCommand[];
+    autoStartServer: boolean;
+}
+
+export interface SchedulerConfig {
+    plugins: Record<string, SchedulerPluginConfig>;
 }
 
 /**
@@ -44,6 +66,7 @@ export interface AppConfig {
     storage: StorageConfig;
     daemon?: DaemonConfig;
     plugins?: Record<string, PluginConfig>;
+    schedulerConfig?: SchedulerConfig;
 
     // ========== LEGACY FIELDS (for backward compatibility) ==========
     /** @deprecated Use plugins.whatsapp */
@@ -93,6 +116,7 @@ function migrateConfig(raw: Record<string, unknown>): AppConfig {
         daemon: (raw.daemon as DaemonConfig) || {
             activeHours: { start: 7, end: 23 }
         },
+        schedulerConfig: raw.schedulerConfig as SchedulerConfig | undefined,
     };
 
     // Check if already migrated (has plugins field)

@@ -2,7 +2,14 @@
  * Layout template - Base HTML structure with accordion container
  */
 
-export function renderLayout(sections: string[]): string {
+interface LayoutOptions {
+    modals?: string[];
+    initialPluginPanel?: string;
+}
+
+export function renderLayout(sections: string[], options: LayoutOptions = {}): string {
+    const modalsHtml = options.modals?.join('\n') ?? '';
+    const initialPluginPanel = options.initialPluginPanel ?? '';
     return `
 <!DOCTYPE html>
 <html lang="en">
@@ -147,6 +154,7 @@ export function renderLayout(sections: string[]): string {
         .status.connected { background: #238636; color: white; }
         .status.disconnected { background: #da3633; color: white; }
         .status.pending { background: #9e6a03; color: white; }
+        .status.warning { background: #9e6a03; color: white; }
         
         /* Form styles */
         form { display: flex; flex-direction: column; gap: 1rem; }
@@ -218,13 +226,16 @@ export function renderLayout(sections: string[]): string {
         }
         
         /* Secondary button style */
-        button.secondary {
+        button.secondary,
+        .btn.secondary {
             background: #30363d;
         }
-        button.secondary:hover {
+        button.secondary:hover,
+        .btn.secondary:hover {
             background: #484f58;
         }
-        button.secondary:active {
+        button.secondary:active,
+        .btn.secondary:active {
             background: #21262d;
         }
         
@@ -236,6 +247,16 @@ export function renderLayout(sections: string[]): string {
             background: #f85149;
         }
         button.danger:active {
+            background: #b62324;
+        }
+
+        .btn.danger {
+            background: #da3633;
+        }
+        .btn.danger:hover {
+            background: #f85149;
+        }
+        .btn.danger:active {
             background: #b62324;
         }
         
@@ -352,6 +373,65 @@ export function renderLayout(sections: string[]): string {
         .tag button:hover {
             background: none;
         }
+
+        /* Plugin hub & modal styles */
+        .plugin-panel {
+            position: fixed;
+            inset: 0;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 999;
+        }
+        .plugin-panel.active {
+            display: flex;
+        }
+        .plugin-panel__overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.65);
+        }
+        .plugin-panel__body {
+            position: relative;
+            width: min(90vw, 800px);
+            max-height: 90vh;
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 10px;
+            padding: 1.5rem;
+            box-shadow: 0 25px 40px rgba(0,0,0,0.45);
+            overflow-y: auto;
+            z-index: 1;
+        }
+        .plugin-panel__header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+        }
+        .plugin-panel__header h3 {
+            margin: 0;
+            color: #79c0ff;
+        }
+        .plugin-panel__content > details {
+            margin: 0;
+            border: none;
+            background: transparent;
+            overflow: visible;
+        }
+        .plugin-panel__content > details[open] {
+            border: none;
+        }
+        .plugin-panel__content > details > summary {
+            display: none;
+        }
+        .plugin-panel__content > details > .section-content {
+            border-top: none;
+            padding: 0;
+        }
+        body.modal-open {
+            overflow: hidden;
+        }
         
         .password-container {
             position: relative;
@@ -398,8 +478,10 @@ export function renderLayout(sections: string[]): string {
         <h1>Own your data <div class="header-actions"><a href="https://discord.gg/gpWGbfX5ZX" target="_blank" class="discord-btn">💬 Join Discord</a><button onclick="closeConfig()" class="close-btn">✕ Close</button></div></h1>
         ${sections.join('\n')}
     </div>
+    ${modalsHtml}
     
     <script>
+    const INITIAL_PLUGIN_PANEL = '${initialPluginPanel}';
     async function closeConfig() {
         try {
             await fetch('/shutdown', { method: 'POST' });
@@ -506,76 +588,100 @@ export function renderLayout(sections: string[]): string {
     }
     
     async function startDaemon(btn) {
-        const statusEl = document.getElementById('restart-status');
+        const statusEl = document.getElementById('scheduler-daemon-status') || document.getElementById('restart-status');
         btn.disabled = true;
-        statusEl.textContent = 'Starting daemon...';
-        statusEl.style.color = '#f0a030';
+        if (statusEl) {
+            statusEl.textContent = 'Starting daemon...';
+            statusEl.style.color = '#f0a030';
+        }
         
         try {
             const res = await fetch('/system/start-daemon', { method: 'POST' });
             const data = await res.json();
             
             if (data.success) {
-                statusEl.innerHTML = '✅ ' + data.message + ' <a href="javascript:location.reload()">Refresh</a>';
-                statusEl.style.color = '#7ee787';
+                if (statusEl) {
+                    statusEl.innerHTML = '✅ ' + data.message + ' <a href="javascript:location.reload()">Refresh</a>';
+                    statusEl.style.color = '#7ee787';
+                }
             } else {
-                statusEl.textContent = '❌ ' + (data.error || 'Start failed');
-                statusEl.style.color = '#f85149';
+                if (statusEl) {
+                    statusEl.textContent = '❌ ' + (data.error || 'Start failed');
+                    statusEl.style.color = '#f85149';
+                }
                 btn.disabled = false;
             }
         } catch (e) {
-            statusEl.textContent = '❌ ' + e.message;
-            statusEl.style.color = '#f85149';
+            if (statusEl) {
+                statusEl.textContent = '❌ ' + e.message;
+                statusEl.style.color = '#f85149';
+            }
             btn.disabled = false;
         }
     }
     
     async function stopDaemon(btn) {
-        const statusEl = document.getElementById('restart-status');
+        const statusEl = document.getElementById('scheduler-daemon-status') || document.getElementById('restart-status');
         btn.disabled = true;
-        statusEl.textContent = 'Stopping daemon...';
-        statusEl.style.color = '#f0a030';
+        if (statusEl) {
+            statusEl.textContent = 'Stopping daemon...';
+            statusEl.style.color = '#f0a030';
+        }
         
         try {
             const res = await fetch('/system/stop-daemon', { method: 'POST' });
             const data = await res.json();
             
             if (data.success) {
-                statusEl.innerHTML = '✅ ' + data.message + ' <a href="javascript:location.reload()">Refresh</a>';
-                statusEl.style.color = '#7ee787';
+                if (statusEl) {
+                    statusEl.innerHTML = '✅ ' + data.message + ' <a href="javascript:location.reload()">Refresh</a>';
+                    statusEl.style.color = '#7ee787';
+                }
             } else {
-                statusEl.textContent = '❌ ' + (data.error || 'Stop failed');
-                statusEl.style.color = '#f85149';
+                if (statusEl) {
+                    statusEl.textContent = '❌ ' + (data.error || 'Stop failed');
+                    statusEl.style.color = '#f85149';
+                }
                 btn.disabled = false;
             }
         } catch (e) {
-            statusEl.textContent = '❌ ' + e.message;
-            statusEl.style.color = '#f85149';
+            if (statusEl) {
+                statusEl.textContent = '❌ ' + e.message;
+                statusEl.style.color = '#f85149';
+            }
             btn.disabled = false;
         }
     }
     
     async function restartDaemon(btn) {
-        const statusEl = document.getElementById('restart-status');
+        const statusEl = document.getElementById('scheduler-daemon-status') || document.getElementById('restart-status');
         btn.disabled = true;
-        statusEl.textContent = 'Restarting daemon...';
-        statusEl.style.color = '#f0a030';
+        if (statusEl) {
+            statusEl.textContent = 'Restarting daemon...';
+            statusEl.style.color = '#f0a030';
+        }
         
         try {
             const res = await fetch('/system/restart-daemon', { method: 'POST' });
             const data = await res.json();
             
             if (data.success) {
-                statusEl.innerHTML = '✅ ' + data.message + ' <a href="javascript:location.reload()">Refresh</a>';
-                statusEl.style.color = '#7ee787';
+                if (statusEl) {
+                    statusEl.innerHTML = '✅ ' + data.message + ' <a href="javascript:location.reload()">Refresh</a>';
+                    statusEl.style.color = '#7ee787';
+                }
             } else {
-                statusEl.textContent = '❌ ' + (data.error || 'Restart failed');
-                statusEl.style.color = '#f85149';
+                if (statusEl) {
+                    statusEl.textContent = '❌ ' + (data.error || 'Restart failed');
+                    statusEl.style.color = '#f85149';
+                }
                 btn.disabled = false;
             }
         } catch (e) {
-            statusEl.textContent = '❌ ' + e.message;
-            statusEl.style.color = '#f85149';
+            if (statusEl) {
+                statusEl.textContent = '❌ ' + e.message;
+                statusEl.style.color = '#f85149';
+            }
             btn.disabled = false;
         }
     }
@@ -762,6 +868,84 @@ export function renderLayout(sections: string[]): string {
             setTimeout(() => btn.textContent = originalText, 2000);
         });
     }
+
+    function closeAllPluginPanels() {
+        document.querySelectorAll('.plugin-panel.active').forEach(panel => {
+            panel.classList.remove('active');
+            panel.setAttribute('aria-hidden', 'true');
+        });
+        document.body.classList.remove('modal-open');
+    }
+
+    function openPluginPanel(id) {
+        const panel = document.getElementById('plugin-panel-' + id);
+        if (!panel) return;
+        closeAllPluginPanels();
+        panel.classList.add('active');
+        panel.setAttribute('aria-hidden', 'false');
+        document.body.classList.add('modal-open');
+        panel.querySelectorAll('.plugin-panel__content > details').forEach(detail => detail.open = true);
+    }
+
+    function closePluginPanel(id) {
+        const panel = document.getElementById('plugin-panel-' + id);
+        if (!panel) return;
+        panel.classList.remove('active');
+        panel.setAttribute('aria-hidden', 'true');
+        if (!document.querySelector('.plugin-panel.active')) {
+            document.body.classList.remove('modal-open');
+        }
+    }
+
+    document.addEventListener('keyup', (event) => {
+        if (event.key === 'Escape') {
+            closeAllPluginPanels();
+        }
+    });
+
+    if (INITIAL_PLUGIN_PANEL) {
+        setTimeout(() => openPluginPanel(INITIAL_PLUGIN_PANEL), 300);
+    }
+
+    async function runServiceAction(serviceId, action, btn) {
+        const originalText = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = '⏳';
+
+        try {
+            const endpoint = serviceId === 'config-server' && action === 'restart'
+                ? '/system/restart-config'
+                : '/system/service/' + encodeURIComponent(serviceId) + '/' + encodeURIComponent(action);
+            const res = await fetch(endpoint, { method: 'POST' });
+            const data = await res.json();
+            if (!data.success) {
+                throw new Error(data.error || data.message || 'Action failed');
+            }
+            btn.textContent = '✅';
+            setTimeout(() => location.reload(), 700);
+        } catch (e) {
+            btn.disabled = false;
+            btn.textContent = originalText;
+            alert('Service action failed: ' + (e.message || e));
+        }
+    }
+
+    function syncSchedulerCadenceUi(pluginId) {
+        const select = document.querySelector('.scheduler-cadence[data-plugin-id="' + pluginId + '"]');
+        if (!select) return;
+        const intervalBlock = document.getElementById('interval-settings-' + pluginId);
+        const fixedBlock = document.getElementById('fixed-settings-' + pluginId);
+        const isFixed = select.value === 'fixed';
+        if (intervalBlock) intervalBlock.style.display = isFixed ? 'none' : 'grid';
+        if (fixedBlock) fixedBlock.style.display = isFixed ? 'block' : 'none';
+    }
+
+    document.querySelectorAll('.scheduler-cadence').forEach(select => {
+        const pluginId = select.getAttribute('data-plugin-id');
+        if (!pluginId) return;
+        syncSchedulerCadenceUi(pluginId);
+        select.addEventListener('change', () => syncSchedulerCadenceUi(pluginId));
+    });
     
     // API-based tunnel functions for Your Domain section
     async function testCloudflareCredentials(btn) {

@@ -50,11 +50,13 @@ export interface PluginManifest {
     /** Commands to execute for each phase */
     commands: {
         /** Fetch raw data from source → raw-dumps/{folder}/ */
-        get: string;
+        get?: string;
         /** Process raw data → connector_data/{folder}/ */
         process?: string;
         /** Push to GitHub */
-        push: string;
+        push?: string;
+        /** Optional long-running server/listener command */
+        server?: string;
     };
 
     /** Optional dependencies information */
@@ -99,13 +101,13 @@ export interface TunnelConfig {
  * Base plugin config stored in config.json under plugins.{id}
  */
 export interface BasePluginConfig {
-    /** Whether this plugin is enabled for scheduling */
-    enabled: boolean;
+    /** Legacy scheduler toggle; scheduling now lives in central scheduler config */
+    enabled?: boolean;
 
-    /** Interval hours (for interval mode plugins) */
+    /** Legacy interval setting kept for backward compatibility */
     intervalHours?: number;
 
-    /** Random variance in minutes (for interval mode plugins) */
+    /** Legacy jitter setting kept for backward compatibility */
     randomMinutes?: number;
 
     /** GitHub path for this plugin's data */

@@ -30,14 +30,11 @@ Local-first data connectors. Collect your conversations and posts from various p
 ```bash
 npm install
 
-# 1. Configure (opens web UI at http://localhost:3456)
-npm run config
-
-# 2. Start the daemon (runs all plugins on schedule)
-npm run get_all
+# Start all services (config UI + scheduler)
+npm run start
 ```
 
-That's it! The daemon will automatically:
+That starts the config UI at `http://localhost:3456` and runs the scheduler daemon, which will automatically:
 - Run each plugin's `get → process → push` commands on schedule
 - Respect active hours (7:00 - 23:00)
 - Add random delays to mimic human behavior

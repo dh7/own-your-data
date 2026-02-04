@@ -72,8 +72,6 @@ export function renderTemplate(
     const daysToSync = cfg.daysToSync || DEFAULT_CONFIG.daysToSync;
     const serverPort = cfg.serverPort || DEFAULT_CONFIG.serverPort;
     const enabled = cfg.enabled ?? DEFAULT_CONFIG.enabled;
-    const intervalHours = cfg.intervalHours ?? DEFAULT_CONFIG.intervalHours;
-    const randomMinutes = cfg.randomMinutes ?? DEFAULT_CONFIG.randomMinutes;
 
     // Get or create API key
     const apiKey = getOrCreateApiKey();
@@ -116,15 +114,21 @@ export function renderTemplate(
     const tunnelServerUrl = tunnelUrl ? `${tunnelUrl}/chrome-history/api/chrome-history` : null;
 
     // Determine status
-    let statusClass = 'pending';
-    let statusText = '⚠️ Setup needed';
+    let statusClass = 'disconnected';
+    let statusText = '⏸ Disabled';
 
-    if (isActive) {
+    if (!enabled) {
+        statusClass = 'disconnected';
+        statusText = '⏸ Disabled';
+    } else if (isActive) {
         statusClass = 'connected';
         statusText = `✅ ${historyFiles.length} days tracked`;
     } else if (apiKey) {
         statusClass = 'warning';
         statusText = '⏳ Waiting for data';
+    } else {
+        statusClass = 'pending';
+        statusText = '⚠️ Setup needed';
     }
 
     return `
@@ -160,6 +164,13 @@ export function renderTemplate(
         </div>
 
         <form action="/plugin/chrome-history" method="POST">
+            <div style="margin-bottom: 1rem; padding: 0.75rem; background: #0a0a0a; border: 1px solid #333; border-radius: 4px;">
+                <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer;">
+                    <input type="checkbox" name="enabled" ${enabled ? 'checked' : ''} />
+                    Enable plugin
+                </label>
+            </div>
+
             <!-- Server Port (first) -->
             <h4 style="margin-bottom: 0.75rem; color: #aaa;">🖥️ Server</h4>
             <div style="margin-bottom: 1.5rem; padding: 0.75rem; background: #0a0a0a; border: 1px solid #333; border-radius: 4px;">
@@ -167,23 +178,6 @@ export function renderTemplate(
                     <label style="color: #aaa;">Receiver port:</label>
                     <input type="number" name="serverPort" value="${serverPort}" min="1024" max="65535" style="width: 100px;" />
                     <span style="color: #666; font-size: 0.85em;">Start with: <code>npm run chrome:server</code></span>
-                </div>
-            </div>
-
-            <!-- Scheduling (like Instagram) -->
-            <h4 style="margin-bottom: 0.75rem; color: #aaa;">⏰ GitHub Push Schedule</h4>
-            <div class="schedule-row" style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem; padding: 0.75rem; background: #0a0a0a; border: 1px solid #333; border-radius: 4px;">
-                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-                    <input type="checkbox" name="enabled" ${enabled ? 'checked' : ''} />
-                    Enable scheduling
-                </label>
-                <div style="display: flex; align-items: center; gap: 0.5rem; color: #aaa;">
-                    <span>Every</span>
-                    <input type="number" name="intervalHours" value="${intervalHours}" min="1" max="168" style="width: 60px;" />
-                    <span>hours</span>
-                    <span style="color: #666; margin-left: 0.5rem;">±</span>
-                    <input type="number" name="randomMinutes" value="${randomMinutes}" min="0" max="120" style="width: 60px;" />
-                    <span>min</span>
                 </div>
             </div>
 
@@ -411,8 +405,6 @@ async function testTunnel() {
 export function parseFormData(body: Record<string, string>): ChromeHistoryPluginConfig {
     return {
         enabled: body.enabled === 'on',
-        intervalHours: parseInt(body.intervalHours) || DEFAULT_CONFIG.intervalHours,
-        randomMinutes: parseInt(body.randomMinutes) || DEFAULT_CONFIG.randomMinutes,
         folderName: body.folderName || DEFAULT_CONFIG.folderName,
         githubPath: body.githubPath || DEFAULT_CONFIG.githubPath,
         daysToSync: parseInt(body.daysToSync) || DEFAULT_CONFIG.daysToSync,
