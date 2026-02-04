@@ -41,11 +41,8 @@ import { renderDomainSection, TunnelPluginInfo } from './templates/domain';
 // Tunnel
 import {
   getTunnelStatusAsync,
-  startTunnel,
-  stopTunnel,
   checkCloudflared,
   installCloudflared,
-  startTunnelWithToken,
   saveTunnelConfig,
   deleteTunnelConfig,
 } from '../tunnel/manager';
@@ -538,18 +535,11 @@ app.get('/', async (req, res) => {
       name: 'Cloudflare Tunnel',
       icon: '☁️',
       running: tunnelStatus.tunnelRunning,
-      description: tunnelStatus.tunnelConfigured ? 'Exposes services via Cloudflare' : 'Not configured',
+      description: tunnelStatus.tunnelConfigured ? 'Managed by npm run start' : 'Not configured',
       detail: tunnelStatus.tunnelRunning
         ? (tunnelStatus.tunnelUrl || `Proxy on port ${PROXY_PORT}`)
-        : (tunnelStatus.tunnelConfigured ? 'Ready to start' : 'Configure in Domain section'),
-      actions: tunnelStatus.tunnelConfigured
-        ? (tunnelStatus.tunnelRunning
-          ? [
-            { action: 'restart', label: 'Restart', style: 'secondary' },
-            { action: 'stop', label: 'Stop', style: 'danger' },
-          ]
-          : [{ action: 'start', label: 'Start' }])
-        : [],
+        : (tunnelStatus.tunnelConfigured ? 'Will start with npm run start' : 'Configure in Domain section'),
+      actions: [], // Tunnel is managed by start.ts, not config server
     },
   ];
 
@@ -1650,27 +1640,9 @@ app.post('/system/service/:id/:action', async (req, res) => {
       return;
     }
 
-    // Handle tunnel service
+    // Tunnel is managed by start.ts, not config server
     if (serviceId === 'tunnel') {
-      if (action === 'start') {
-        const result = await startTunnelWithToken();
-        if (!result.success) {
-          res.json({ success: false, error: result.message });
-          return;
-        }
-      } else if (action === 'stop') {
-        await stopTunnel();
-      } else {
-        await stopTunnel();
-        await new Promise(resolve => setTimeout(resolve, 500));
-        const result = await startTunnelWithToken();
-        if (!result.success) {
-          res.json({ success: false, error: result.message });
-          return;
-        }
-      }
-
-      res.json({ success: true, message: `Tunnel ${action} complete` });
+      res.status(400).json({ success: false, error: 'Tunnel is managed by npm run start, not config server' });
       return;
     }
 
@@ -1730,17 +1702,8 @@ app.get('/tunnel/status', async (req, res) => {
   res.json(status);
 });
 
-app.post('/tunnel/start', async (req, res) => {
-  console.log('☁️  Starting Cloudflare tunnel...');
-  const result = await startTunnel();
-  res.json(result);
-});
-
-app.post('/tunnel/stop', async (req, res) => {
-  console.log('☁️  Stopping Cloudflare tunnel...');
-  const result = await stopTunnel();
-  res.json(result);
-});
+// Note: /tunnel/start and /tunnel/stop routes removed
+// Tunnel is now managed by npm run start (start.ts)
 
 // Test chrome-history tunnel endpoint (proxy to avoid CORS)
 app.post('/tunnel/test-chrome', async (req, res) => {
@@ -1852,8 +1815,8 @@ app.post('/tunnel/teardown', async (req, res) => {
     return;
   }
 
-  // Stop the tunnel first
-  await stopTunnel();
+  // Note: Tunnel process (if running) is managed by start.ts and will
+  // fail gracefully when config is deleted, or user can restart npm run start
 
   console.log('☁️  Tearing down tunnel...');
   const result = await teardownTunnel(config.credentials, config.tunnelId, config.hostname);
@@ -1862,12 +1825,6 @@ app.post('/tunnel/teardown', async (req, res) => {
     await deleteTunnelConfig();
   }
 
-  res.json(result);
-});
-
-app.post('/tunnel/start-token', async (req, res) => {
-  console.log('☁️  Starting tunnel with token...');
-  const result = await startTunnelWithToken();
   res.json(result);
 });
 
