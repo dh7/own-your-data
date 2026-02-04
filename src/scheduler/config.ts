@@ -55,6 +55,7 @@ export function getDefaultSchedulerPluginConfig(
         fixedTimes: [],
         commands: fallbackCommands,
         autoStartServer: typeof plugin.manifest.commands.server === 'string' && plugin.manifest.commands.server.trim().length > 0,
+        autoRestartServer: true,
     };
 }
 
@@ -82,5 +83,6 @@ export function resolveSchedulerPluginConfig(
         fixedTimes,
         commands: commands.length > 0 ? commands : defaults.commands,
         autoStartServer: existing?.autoStartServer ?? defaults.autoStartServer,
+        autoRestartServer: existing?.autoRestartServer ?? defaults.autoRestartServer,
     };
 }

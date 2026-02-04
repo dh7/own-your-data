@@ -468,6 +468,7 @@ app.get('/', async (req, res) => {
         commands: schedulerConfig.commands,
         availableCommands,
         autoStartServer: schedulerConfig.autoStartServer,
+        autoRestartServer: schedulerConfig.autoRestartServer,
         hasServer: typeof discovered.manifest.commands.server === 'string' && discovered.manifest.commands.server.trim().length > 0,
         scheduleText,
       });
@@ -694,6 +695,7 @@ app.post('/scheduler/plugin/:id', async (req, res) => {
     fixedTimes,
     commands: commands.length > 0 ? commands : existing.commands,
     autoStartServer: req.body.autoStartServer === 'on',
+    autoRestartServer: req.body.autoRestartServer === 'on',
   };
 
   if (!config.schedulerConfig) {

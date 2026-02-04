@@ -7,7 +7,8 @@
  * - optional plugin server auto-start
  */
 
-import { ChildProcess, spawn } from 'child_process';
+import { ChildProcess, spawn, exec } from 'child_process';
+import { promisify } from 'util';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { loadConfig } from '../config/config';
@@ -175,12 +176,43 @@ async function runPluginJob(plugin: DiscoveredPlugin): Promise<void> {
     schedulerState.set(plugin.manifest.id, state);
 }
 
-function ensurePluginServer(plugin: DiscoveredPlugin): void {
+const execAsync = promisify(exec);
+
+/**
+ * Check if a process matching the given command pattern is already running
+ * Returns the PID if found, null otherwise
+ */
+async function checkExistingProcess(commandPattern: string): Promise<number | null> {
+    try {
+        // Extract a unique identifier from the command (e.g., filename or plugin path)
+        // For "ts-node src/plugins/whatsapp/get.ts", use "whatsapp/get.ts"
+        const match = commandPattern.match(/src\/plugins\/([^/]+\/[^/\s]+)/);
+        const searchPattern = match ? match[1] : commandPattern;
+
+        const { stdout } = await execAsync(`pgrep -f "${searchPattern}" | head -1`);
+        const pid = parseInt(stdout.trim(), 10);
+        if (pid && pid !== process.pid) {
+            return pid;
+        }
+    } catch {
+        // pgrep returns non-zero if no process found, that's expected
+    }
+    return null;
+}
+
+async function ensurePluginServer(plugin: DiscoveredPlugin): Promise<void> {
     const existing = serviceProcesses.get(plugin.manifest.id);
     if (existing) return;
 
     const command = plugin.manifest.commands.server;
     if (!command || command.trim().length === 0) return;
+
+    // Check if a process is already running for this server command
+    const existingPid = await checkExistingProcess(command);
+    if (existingPid) {
+        console.log(`⚠️ ${plugin.manifest.name} server already running (PID ${existingPid}), skipping start`);
+        return;
+    }
 
     console.log(`🧩 Starting server for ${plugin.manifest.name}: ${command}`);
     void logServerStart(plugin.manifest.id, command);
@@ -208,16 +240,22 @@ function ensurePluginServer(plugin: DiscoveredPlugin): void {
     serviceProcesses.set(plugin.manifest.id, child);
     serviceCommandByPlugin.set(plugin.manifest.id, command);
 
-    child.on('exit', () => {
+    child.on('exit', (code) => {
         void logServerStop(plugin.manifest.id);
         serviceProcesses.delete(plugin.manifest.id);
         const restartCommand = serviceCommandByPlugin.get(plugin.manifest.id);
         if (!restartCommand) return;
+
         setTimeout(async () => {
             const appConfig = await loadConfig();
             const schedule = resolveSchedulerPluginConfig(appConfig, plugin);
-            if (schedule.autoStartServer) {
-                ensurePluginServer(plugin);
+
+            // Only auto-restart if BOTH autoStartServer and autoRestartServer are enabled
+            if (schedule.autoStartServer && schedule.autoRestartServer) {
+                console.log(`🔄 Auto-restarting ${plugin.manifest.name} server (exit code: ${code})`);
+                await ensurePluginServer(plugin);
+            } else if (schedule.autoStartServer && !schedule.autoRestartServer) {
+                console.log(`⏸️ ${plugin.manifest.name} server stopped (auto-restart disabled)`);
             }
         }, 5000);
     });
@@ -250,7 +288,7 @@ async function tick(plugins: DiscoveredPlugin[]): Promise<void> {
         const state = schedulerState.get(plugin.manifest.id) || { running: false, nextRun: null };
 
         if (schedule.enabled && schedule.autoStartServer && plugin.manifest.commands.server) {
-            ensurePluginServer(plugin);
+            await ensurePluginServer(plugin);
         }
 
         if (!schedule.enabled || schedule.commands.length === 0) {

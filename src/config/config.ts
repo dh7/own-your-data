@@ -54,6 +54,7 @@ export interface SchedulerPluginConfig {
     fixedTimes: string[];
     commands: SchedulerCommand[];
     autoStartServer: boolean;
+    autoRestartServer: boolean;
 }
 
 export interface SchedulerConfig {

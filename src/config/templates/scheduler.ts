@@ -30,6 +30,7 @@ export interface SchedulerPluginEditor {
     commands: SchedulerCommand[];
     availableCommands: SchedulerCommand[];
     autoStartServer: boolean;
+    autoRestartServer: boolean;
     hasServer: boolean;
     scheduleText: string;
 }
@@ -176,10 +177,16 @@ export function renderSchedulerSection(
                         `}
 
                         ${plugin.hasServer ? `
-                            <label style="display:flex; align-items:center; gap:0.5rem;">
-                                <input type="checkbox" name="autoStartServer" ${plugin.autoStartServer ? 'checked' : ''} />
-                                Auto-start this plugin's server with the scheduler daemon
-                            </label>
+                            <div style="display:flex; flex-direction:column; gap:0.5rem; margin-top:0.35rem;">
+                                <label style="display:flex; align-items:center; gap:0.5rem;">
+                                    <input type="checkbox" name="autoStartServer" ${plugin.autoStartServer ? 'checked' : ''} />
+                                    Auto-start this plugin's server with the scheduler daemon
+                                </label>
+                                <label style="display:flex; align-items:center; gap:0.5rem;">
+                                    <input type="checkbox" name="autoRestartServer" ${plugin.autoRestartServer ? 'checked' : ''} />
+                                    Auto-restart server if it crashes
+                                </label>
+                            </div>
                         ` : ''}
 
                         <button type="submit">💾 Save Scheduler Rules</button>
