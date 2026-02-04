@@ -8,12 +8,12 @@
 import * as fs from 'fs/promises';
 import { createWriteStream, WriteStream } from 'fs';
 import * as path from 'path';
-
-const LOGS_DIR = path.join(process.cwd(), 'logs', 'scheduler');
+import { loadConfig, getResolvedPaths } from '../config/config';
 
 interface DailyLogStream {
     date: string;
     stream: WriteStream;
+    logsDir: string;
 }
 
 let currentLogStream: DailyLogStream | null = null;
@@ -27,18 +27,26 @@ function getTimestamp(): string {
     return new Date().toISOString();
 }
 
-async function ensureLogDir(): Promise<void> {
-    await fs.mkdir(LOGS_DIR, { recursive: true });
+async function getLogsDir(): Promise<string> {
+    const config = await loadConfig();
+    const paths = getResolvedPaths(config);
+    return paths.schedulerLogs;
 }
 
-function getLogFilePath(dateStr: string): string {
-    return path.join(LOGS_DIR, `${dateStr}.log`);
+async function ensureLogDir(logsDir: string): Promise<void> {
+    await fs.mkdir(logsDir, { recursive: true });
+}
+
+function getLogFilePath(logsDir: string, dateStr: string): string {
+    return path.join(logsDir, `${dateStr}.log`);
 }
 
 async function getDailyLogStream(): Promise<WriteStream> {
     const today = getDateString();
+    const logsDir = await getLogsDir();
 
-    if (currentLogStream && currentLogStream.date === today) {
+    // Check if we have a valid stream for today in the same directory
+    if (currentLogStream && currentLogStream.date === today && currentLogStream.logsDir === logsDir) {
         return currentLogStream.stream;
     }
 
@@ -47,12 +55,12 @@ async function getDailyLogStream(): Promise<WriteStream> {
         currentLogStream.stream.end();
     }
 
-    await ensureLogDir();
+    await ensureLogDir(logsDir);
 
-    const logPath = getLogFilePath(today);
+    const logPath = getLogFilePath(logsDir, today);
     const stream = createWriteStream(logPath, { flags: 'a' });
 
-    currentLogStream = { date: today, stream };
+    currentLogStream = { date: today, stream, logsDir };
 
     // Log header for new day
     const header = `\n${'='.repeat(60)}\n📅 New Day: ${today}\n${'='.repeat(60)}\n\n`;
@@ -153,6 +161,6 @@ export async function closeLogger(): Promise<void> {
     }
 }
 
-export function getLogsDirectory(): string {
-    return LOGS_DIR;
+export async function getLogsDirectory(): Promise<string> {
+    return getLogsDir();
 }

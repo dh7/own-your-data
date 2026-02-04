@@ -616,7 +616,7 @@ app.get('/', async (req, res) => {
 
 // Save storage config
 app.post('/storage', async (req, res) => {
-  const { auth, logs, rawDumps, connectorData } = req.body;
+  const { auth, logs, rawDumps, connectorData, schedulerLogs } = req.body;
   const config = await loadConfig();
 
   config.storage = {
@@ -624,6 +624,7 @@ app.post('/storage', async (req, res) => {
     logs: logs || './logs',
     rawDumps: rawDumps || './raw-dumps',
     connectorData: connectorData || './connector_data',
+    schedulerLogs: schedulerLogs || undefined, // Only save if explicitly set
   };
 
   await saveConfig(config);
@@ -839,11 +840,11 @@ app.get('/zip', async (req, res) => {
     res.setHeader('Content-Disposition', `attachment; filename="${safeZipName}"`);
     res.setHeader('Content-Length', zipStat.size);
     res.setHeader('Connection', 'close');
-    
+
     const { createReadStream } = await import('fs');
     const fileStream = createReadStream(zipPath);
     fileStream.pipe(res);
-    
+
     fileStream.on('error', (err) => {
       console.error('❌ Stream error:', err);
       if (!res.headersSent) {
@@ -862,13 +863,13 @@ app.get('/zip', async (req, res) => {
 // Creates a zip with API key and server URL already configured
 app.get('/chrome-extension-configured', async (req, res) => {
   console.log('📦 Creating pre-configured Chrome extension...');
-  
+
   try {
     const basePath = process.cwd();
     const extensionSrc = path.join(basePath, 'src', 'plugins', 'chrome-history', 'extension');
     const tempDir = path.join(basePath, 'logs', 'chrome-ext-temp');
     const zipPath = path.join(basePath, 'logs', 'chrome-extension-configured.zip');
-    
+
     // Check extension source exists
     try {
       await fs.access(extensionSrc);
@@ -877,7 +878,7 @@ app.get('/chrome-extension-configured', async (req, res) => {
       res.status(404).send('Extension source files not found');
       return;
     }
-    
+
     // Get API key
     const apiKeyPath = path.join(basePath, 'auth', 'chrome-api-key.txt');
     let apiKey = '';
@@ -892,7 +893,7 @@ app.get('/chrome-extension-configured', async (req, res) => {
       await fs.writeFile(apiKeyPath, apiKey);
       console.log('   Generated new API key');
     }
-    
+
     // Get tunnel URL if configured
     const tunnelConfigPath = path.join(basePath, 'auth', 'cloudflare-tunnel.json');
     let serverUrl = 'http://localhost:3457/api/chrome-history'; // default
@@ -903,13 +904,13 @@ app.get('/chrome-extension-configured', async (req, res) => {
       }
     } catch { }
     console.log('   Server URL:', serverUrl);
-    
+
     // Clean up temp dir
     try {
       await fs.rm(tempDir, { recursive: true });
     } catch { }
     await fs.mkdir(tempDir, { recursive: true });
-    
+
     // Copy extension files using Node.js (cross-platform)
     const copyDir = async (src: string, dest: string) => {
       const entries = await fs.readdir(src, { withFileTypes: true });
@@ -926,18 +927,18 @@ app.get('/chrome-extension-configured', async (req, res) => {
     };
     await copyDir(extensionSrc, tempDir);
     console.log('   Copied extension files');
-    
+
     // Create a settings.json file with pre-configured values
     const settingsContent = JSON.stringify({
       apiKey: apiKey,
       serverUrl: serverUrl
     }, null, 2);
     await fs.writeFile(path.join(tempDir, 'settings.json'), settingsContent);
-    
+
     // Modify background.js to load settings.json on install
     const bgPath = path.join(tempDir, 'background.js');
     const bgContent = await fs.readFile(bgPath, 'utf8');
-    
+
     // Add code to auto-load settings on install or update
     const autoConfigCode = `
 // Auto-configure from settings.json on install or update
@@ -968,10 +969,10 @@ chrome.runtime.onInstalled.addListener(async (details) => {
 });
 
 `;
-    
+
     // Prepend the auto-config code
     await fs.writeFile(bgPath, autoConfigCode + bgContent);
-    
+
     // Update manifest to include settings.json in web_accessible_resources
     const manifestPath = path.join(tempDir, 'manifest.json');
     const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8'));
@@ -982,38 +983,38 @@ chrome.runtime.onInstalled.addListener(async (details) => {
     });
     await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2));
     console.log('   Modified manifest and background.js');
-    
+
     // Create zip using exec
     try {
       await fs.unlink(zipPath);
     } catch { }
-    
+
     const { promisify } = await import('util');
     const execAsync = promisify(exec);
     await execAsync(`cd "${tempDir}" && zip -r "${zipPath}" .`);
-    
+
     // Verify zip was created
     const zipStat = await fs.stat(zipPath);
     console.log(`📦 Created zip: ${zipPath} (${zipStat.size} bytes)`);
-    
+
     // Clean up temp
     await fs.rm(tempDir, { recursive: true });
-    
+
     // Send the file with proper headers
     const zipStat2 = await fs.stat(zipPath);
     res.setHeader('Content-Type', 'application/zip');
     res.setHeader('Content-Disposition', 'attachment; filename="chrome-extension-configured.zip"');
     res.setHeader('Content-Length', zipStat2.size);
     res.setHeader('Connection', 'close');
-    
+
     const { createReadStream } = await import('fs');
     const fileStream = createReadStream(zipPath);
     fileStream.pipe(res);
-    
+
     fileStream.on('end', () => {
       console.log('✅ Extension downloaded successfully');
     });
-    
+
     fileStream.on('error', (err) => {
       console.error('❌ Stream error:', err);
       if (!res.headersSent) {
@@ -1644,12 +1645,12 @@ app.post('/tunnel/stop', async (req, res) => {
 // Test chrome-history tunnel endpoint (proxy to avoid CORS)
 app.post('/tunnel/test-chrome', async (req, res) => {
   const { tunnelUrl, apiKey } = req.body;
-  
+
   if (!tunnelUrl || !apiKey) {
     res.json({ success: false, message: 'Missing tunnelUrl or apiKey' });
     return;
   }
-  
+
   try {
     // Test the /ping endpoint
     const pingUrl = tunnelUrl.replace('/api/chrome-history', '/ping');
@@ -1657,7 +1658,7 @@ app.post('/tunnel/test-chrome', async (req, res) => {
       method: 'GET',
       headers: { 'X-API-Key': apiKey }
     });
-    
+
     if (response.ok) {
       const data = await response.json();
       res.json({ success: true, message: 'Tunnel working!', data });

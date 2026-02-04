@@ -15,6 +15,7 @@ export interface StorageConfig {
     logs: string;          // Collection logs (./logs)
     rawDumps: string;      // Raw API data (./raw-dumps)
     connectorData: string; // MindCache output (./connector_data)
+    schedulerLogs?: string; // Scheduler daily logs (./logs/scheduler)
 }
 
 /**
@@ -228,6 +229,7 @@ export function getResolvedPaths(config: AppConfig) {
     const logsDir = path.resolve(root, config.storage.logs);
     const rawDumpsDir = path.resolve(root, config.storage.rawDumps);
     const connectorDataDir = path.resolve(root, config.storage.connectorData || DEFAULT_STORAGE.connectorData);
+    const schedulerLogsDir = path.resolve(root, config.storage.schedulerLogs || path.join(config.storage.logs, 'scheduler'));
 
     return {
         // Global
@@ -235,6 +237,7 @@ export function getResolvedPaths(config: AppConfig) {
         logs: logsDir,
         rawDumps: rawDumpsDir,
         connectorData: connectorDataDir,
+        schedulerLogs: schedulerLogsDir,
 
         // Auth files
         githubToken: path.join(authDir, 'github-token.json'),
