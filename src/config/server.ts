@@ -23,8 +23,9 @@ import {
   setPluginConfig,
   PluginConfig,
   SchedulerCommand,
-  SchedulerPluginConfig,
+  migrateConfigIfNeeded,
 } from './config';
+import { PluginSchedule } from '../scheduler/config';
 import { useSingleFileAuthState } from '../shared/auth-utils';
 import { discoverPlugins, loadPluginModule, DiscoveredPlugin } from '../plugins';
 
@@ -242,7 +243,7 @@ async function checkNvidiaDocker(): Promise<boolean> {
   }
 }
 
-function describeSchedule(schedule: SchedulerPluginConfig): string {
+function describeSchedule(schedule: PluginSchedule): string {
   if (!schedule.enabled) {
     return '<span style="color:#8b949e">Disabled</span>';
   }
@@ -541,7 +542,14 @@ app.get('/', async (req, res) => {
       detail: tunnelStatus.tunnelRunning
         ? (tunnelStatus.tunnelUrl || `Proxy on port ${PROXY_PORT}`)
         : (tunnelStatus.tunnelConfigured ? 'Ready to start' : 'Configure in Domain section'),
-      actions: [], // Controls are in Your Domain section
+      actions: tunnelStatus.tunnelConfigured
+        ? (tunnelStatus.tunnelRunning
+          ? [
+            { action: 'restart', label: 'Restart', style: 'secondary' },
+            { action: 'stop', label: 'Stop', style: 'danger' },
+          ]
+          : [{ action: 'start', label: 'Start' }])
+        : [],
     },
   ];
 
@@ -628,7 +636,7 @@ app.get('/', async (req, res) => {
 
 // Save storage config
 app.post('/storage', async (req, res) => {
-  const { auth, logs, rawDumps, connectorData, schedulerLogs } = req.body;
+  const { auth, logs, rawDumps, connectorData } = req.body;
   const config = await loadConfig();
 
   config.storage = {
@@ -636,7 +644,6 @@ app.post('/storage', async (req, res) => {
     logs: logs || './logs',
     rawDumps: rawDumps || './raw-dumps',
     connectorData: connectorData || './connector_data',
-    schedulerLogs: schedulerLogs || undefined, // Only save if explicitly set
   };
 
   await saveConfig(config);
@@ -696,7 +703,7 @@ app.post('/scheduler/plugin/:id', async (req, res) => {
       })
     : [];
 
-  const nextConfig: SchedulerPluginConfig = {
+  const nextConfig: PluginSchedule = {
     enabled: req.body.enabled === 'on',
     cadence: req.body.cadence === 'fixed' ? 'fixed' : 'interval',
     startHour: Math.min(23, Math.max(0, parseInt(req.body.startHour, 10) || existing.startHour)),
@@ -2037,6 +2044,12 @@ function openBrowser(url: string) {
 
 async function main() {
   console.log('🚀 SecondBrain Connectors Config (Plugin Architecture)\n');
+
+  // Migrate old config format if needed
+  const migration = await migrateConfigIfNeeded();
+  if (migration.migrated) {
+    console.log(`✅ ${migration.message}\n`);
+  }
 
   // Discover plugins on startup
   const plugins = await discoverPlugins();

@@ -207,7 +207,7 @@ function renderStateContent(status: DomainStatus, stateNumber: number): string {
     // State 4: Tunnel created but not running
     if (stateNumber === 4 && status.tunnelConfig) {
         return `
-            <h4 style="color: #79c0ff; margin-bottom: 1rem;">Your Tunnel</h4>
+            <h4 style="color: #79c0ff; margin-bottom: 1rem;">Your Domain Configuration</h4>
             <p style="color: #7ee787; margin-bottom: 0.5rem;">✅ cloudflared installed</p>
             <p style="color: #7ee787; margin-bottom: 0.5rem;">✅ Cloudflare connected</p>
             <p style="color: #7ee787; margin-bottom: 1rem;">✅ Tunnel configured</p>
@@ -229,14 +229,13 @@ function renderStateContent(status: DomainStatus, stateNumber: number): string {
                 </table>
             </div>
             
-            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                <button type="button" onclick="startTunnelWithToken(this)" class="btn">
-                    ▶️ Start Tunnel
-                </button>
-                <button type="button" onclick="deleteTunnelViaApi(this)" class="btn" style="background: #da3633;">
-                    🗑️ Delete Tunnel
-                </button>
-            </div>
+            <p style="color: #8b949e; font-size: 0.9em; margin-bottom: 1rem;">
+                💡 Start/stop the tunnel from the <strong>Services</strong> section above.
+            </p>
+            
+            <button type="button" onclick="deleteTunnelViaApi(this)" class="btn" style="background: #da3633;">
+                🗑️ Delete Tunnel Configuration
+            </button>
             <p id="tunnel-action-status" style="margin-top: 0.5rem; font-size: 0.85em; color: #8b949e;"></p>
         `;
     }
@@ -244,7 +243,7 @@ function renderStateContent(status: DomainStatus, stateNumber: number): string {
     // State 5: Tunnel running
     if (stateNumber === 5 && status.tunnelConfig) {
         return `
-            <h4 style="color: #79c0ff; margin-bottom: 1rem;">Your Tunnel</h4>
+            <h4 style="color: #79c0ff; margin-bottom: 1rem;">Your Domain Configuration</h4>
             <p style="color: #7ee787; margin-bottom: 1rem;">✅ Tunnel is running</p>
             
             <div style="padding: 1rem; background: #0a1a0a; border: 1px solid #2a4a2a; border-radius: 6px; margin-bottom: 1rem;">
@@ -272,10 +271,9 @@ function renderStateContent(status: DomainStatus, stateNumber: number): string {
                 </table>
             </div>
             
-            <button type="button" onclick="stopTunnel(this)" class="btn" style="background: #da3633;">
-                ⏹️ Stop Tunnel
-            </button>
-            <p id="tunnel-action-status" style="margin-top: 0.5rem; font-size: 0.85em; color: #8b949e;"></p>
+            <p style="color: #8b949e; font-size: 0.9em;">
+                💡 Start/stop the tunnel from the <strong>Services</strong> section above.
+            </p>
         `;
     }
 

@@ -79,7 +79,7 @@ async function main() {
         process.exit(1);
     }
 
-    const outputPath = config.whatsapp?.githubPath || 'whatsapp';
+    const outputPath = config.plugins?.whatsapp?.githubPath || 'whatsapp';
     console.log(`📦 Target: ${githubConfig.owner}/${githubConfig.repo}/${outputPath}`);
 
     try {
@@ -96,7 +96,7 @@ async function main() {
         });
 
         // Use per-connector path or fallback
-        const whatsappPath = config.whatsapp?.githubPath || 'whatsapp';
+        const whatsappPath = config.plugins?.whatsapp?.githubPath || 'whatsapp';
         const sync = new MindCacheSync(gitStore, mindcache, {
             filePath: `${whatsappPath}/whatsapp-${today}.md`,
             instanceName: 'WhatsApp Collector',

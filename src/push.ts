@@ -57,7 +57,7 @@ async function main() {
         const relativePath = path.relative(paths.whatsappLocal, file);
         filesToUpload.push({
             localPath: file,
-            remotePath: `${config.whatsapp?.githubPath || 'whatsapp'}/${relativePath}`,
+            remotePath: `${config.plugins?.whatsapp?.githubPath || 'whatsapp'}/${relativePath}`,
             connector: 'whatsapp',
         });
     }
@@ -68,7 +68,7 @@ async function main() {
         const relativePath = path.relative(paths.twitterLocal, file);
         filesToUpload.push({
             localPath: file,
-            remotePath: `${config.twitter?.githubPath || 'twitter'}/${relativePath}`,
+            remotePath: `${config.plugins?.twitter?.githubPath || 'twitter'}/${relativePath}`,
             connector: 'twitter',
         });
     }
@@ -79,7 +79,7 @@ async function main() {
         const relativePath = path.relative(paths.instagramLocal, file);
         filesToUpload.push({
             localPath: file,
-            remotePath: `${config.instagram?.githubPath || 'instagram'}/${relativePath}`,
+            remotePath: `${config.plugins?.instagram?.githubPath || 'instagram'}/${relativePath}`,
             connector: 'instagram',
         });
     }

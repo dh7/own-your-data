@@ -291,11 +291,6 @@ sudo systemctl restart docker</code>
                     <input type="text" id="path-connector-data" name="connectorData" value="${config.connectorData || './connector_data'}" placeholder="./connector_data" />
                     <p class="help">Processed output</p>
                 </div>
-                <div>
-                    <label for="path-scheduler-logs">Scheduler Logs Directory</label>
-                    <input type="text" id="path-scheduler-logs" name="schedulerLogs" value="${config.schedulerLogs || './logs/scheduler'}" placeholder="./logs/scheduler" />
-                    <p class="help">Daily scheduler logs (one file per day)</p>
-                </div>
             </div>
             <button type="submit" style="margin-top: 1rem;">💾 Save Storage Config</button>
         </form>

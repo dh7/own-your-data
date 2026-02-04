@@ -17,8 +17,6 @@ export interface ChromeHistoryPluginConfig extends BasePluginConfig {
 
 export const DEFAULT_CONFIG: ChromeHistoryPluginConfig = {
     enabled: true,
-    intervalHours: 24,
-    randomMinutes: 60,
     folderName: 'chrome-history',
     githubPath: 'chrome-history',
     daysToSync: 30,

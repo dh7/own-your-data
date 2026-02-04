@@ -51,8 +51,6 @@ export interface TranscriptsPluginConfig extends BasePluginConfig {
  */
 export const DEFAULT_CONFIG: TranscriptsPluginConfig = {
     enabled: true,
-    intervalHours: 12,
-    randomMinutes: 30,
     transcriptsFolder: './transcripts',
     model: 'base',
     language: undefined, // auto-detect (supports multilingual)

@@ -98,17 +98,12 @@ export interface TunnelConfig {
 }
 
 /**
- * Base plugin config stored in config.json under plugins.{id}
+ * Base plugin config stored in config/{pluginId}.json
+ * Plugin configs should NOT contain scheduler settings - those go in config/scheduler.json
  */
 export interface BasePluginConfig {
-    /** Legacy scheduler toggle; scheduling now lives in central scheduler config */
+    /** Whether this plugin is enabled */
     enabled?: boolean;
-
-    /** Legacy interval setting kept for backward compatibility */
-    intervalHours?: number;
-
-    /** Legacy jitter setting kept for backward compatibility */
-    randomMinutes?: number;
 
     /** GitHub path for this plugin's data */
     githubPath?: string;

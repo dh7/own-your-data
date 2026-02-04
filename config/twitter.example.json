@@ -1,0 +1,6 @@
+{
+  "enabled": true,
+  "accounts": ["elonmusk", "openai"],
+  "tweetsPerAccount": 100,
+  "githubPath": "twitter"
+}

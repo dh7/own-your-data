@@ -23,8 +23,6 @@ export interface InstagramPluginConfig extends BasePluginConfig {
  */
 export const DEFAULT_CONFIG: InstagramPluginConfig = {
     enabled: true,
-    intervalHours: 6,
-    randomMinutes: 30,
     accounts: [],
     postsPerAccount: 50,
     githubPath: 'instagram',
