@@ -75,8 +75,15 @@ async function isTunnelConfigured(): Promise<boolean> {
         const configPath = path.join(CWD, 'auth', 'tunnel-config.json');
         const data = await fs.readFile(configPath, 'utf-8');
         const config = JSON.parse(data);
-        return Boolean(config.tunnelToken);
-    } catch {
+        const configured = Boolean(config.tunnelToken);
+        if (!configured) {
+            console.log('   (tunnel-config.json exists but no tunnelToken)');
+        }
+        return configured;
+    } catch (e: any) {
+        if (e.code !== 'ENOENT') {
+            console.log(`   (tunnel config error: ${e.message})`);
+        }
         return false;
     }
 }

@@ -535,11 +535,18 @@ app.get('/', async (req, res) => {
       name: 'Cloudflare Tunnel',
       icon: '☁️',
       running: tunnelStatus.tunnelRunning,
-      description: tunnelStatus.tunnelConfigured ? 'Managed by npm run start' : 'Not configured',
+      description: tunnelStatus.tunnelConfigured ? 'Standalone service (npm run tunnel)' : 'Not configured',
       detail: tunnelStatus.tunnelRunning
         ? (tunnelStatus.tunnelUrl || `Proxy on port ${PROXY_PORT}`)
-        : (tunnelStatus.tunnelConfigured ? 'Will start with npm run start' : 'Configure in Domain section'),
-      actions: [], // Tunnel is managed by start.ts, not config server
+        : (tunnelStatus.tunnelConfigured ? 'Ready to start' : 'Configure in Domain section'),
+      actions: tunnelStatus.tunnelConfigured
+        ? (tunnelStatus.tunnelRunning
+          ? [
+            { action: 'restart', label: 'Restart', style: 'secondary' },
+            { action: 'stop', label: 'Stop', style: 'danger' },
+          ]
+          : [{ action: 'start', label: 'Start' }])
+        : [],
     },
   ];
 
@@ -1640,9 +1647,32 @@ app.post('/system/service/:id/:action', async (req, res) => {
       return;
     }
 
-    // Tunnel is managed by start.ts, not config server
+    // Tunnel runs as standalone process - start/stop via PID
     if (serviceId === 'tunnel') {
-      res.status(400).json({ success: false, error: 'Tunnel is managed by npm run start, not config server' });
+      const tunnelPidPath = path.join(process.cwd(), 'logs', 'tunnel.pid');
+      
+      if (action === 'stop' || action === 'restart') {
+        try {
+          const pidData = await fs.readFile(tunnelPidPath, 'utf-8');
+          const pid = parseInt(pidData.trim(), 10);
+          if (!isNaN(pid)) {
+            process.kill(pid, 'SIGTERM');
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+        } catch { /* no pid file or process */ }
+      }
+      
+      if (action === 'start' || action === 'restart') {
+        const { spawn } = await import('child_process');
+        const child = spawn('npm', ['run', 'tunnel'], {
+          cwd: process.cwd(),
+          detached: true,
+          stdio: 'ignore',
+        });
+        child.unref();
+      }
+      
+      res.json({ success: true, message: `Tunnel ${action} complete` });
       return;
     }
 
