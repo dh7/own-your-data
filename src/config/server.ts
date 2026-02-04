@@ -1561,6 +1561,62 @@ app.post('/system/restart-daemon', async (req, res) => {
   }
 });
 
+// Folder picker endpoint - opens native folder dialog
+app.post('/system/pick-folder', async (req, res) => {
+  const { startPath } = req.body;
+  const cwd = process.cwd();
+  
+  try {
+    const platform = process.platform;
+    let selectedPath: string | null = null;
+
+    if (platform === 'darwin') {
+      // macOS: use osascript
+      const script = `
+        set startFolder to POSIX file "${startPath || cwd}" as alias
+        try
+          set selectedFolder to choose folder with prompt "Select folder" default location startFolder
+          return POSIX path of selectedFolder
+        on error
+          return ""
+        end try
+      `;
+      const result = await new Promise<string>((resolve, reject) => {
+        exec(`osascript -e '${script.replace(/'/g, "'\"'\"'")}'`, (err, stdout) => {
+          if (err) reject(err);
+          else resolve(stdout.trim());
+        });
+      });
+      selectedPath = result || null;
+    } else if (platform === 'linux') {
+      // Linux: try zenity or kdialog
+      const result = await new Promise<string>((resolve) => {
+        exec(`zenity --file-selection --directory --filename="${startPath || cwd}/" 2>/dev/null || kdialog --getexistingdirectory "${startPath || cwd}" 2>/dev/null`, (err, stdout) => {
+          resolve(stdout.trim());
+        });
+      });
+      selectedPath = result || null;
+    } else {
+      // Windows or unsupported - return error
+      res.json({ success: false, error: 'Folder picker not supported on this platform. Please type the path manually.' });
+      return;
+    }
+
+    if (selectedPath) {
+      // Make path relative to cwd if it's inside cwd
+      if (selectedPath.startsWith(cwd + '/')) {
+        selectedPath = './' + selectedPath.slice(cwd.length + 1);
+      }
+      res.json({ success: true, path: selectedPath });
+    } else {
+      res.json({ success: false, error: 'No folder selected' });
+    }
+  } catch (e: any) {
+    console.error('Folder picker error:', e.message);
+    res.json({ success: false, error: e.message });
+  }
+});
+
 app.post('/system/service/:id/:action', async (req, res) => {
   const serviceId = req.params.id;
   const action = req.params.action as 'start' | 'stop' | 'restart';

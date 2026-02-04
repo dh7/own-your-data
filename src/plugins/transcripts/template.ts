@@ -55,9 +55,12 @@ export function renderTemplate(
             <h4 style="margin-bottom: 0.75rem; color: #aaa;">📁 Audio Source</h4>
             <div>
                 <label for="transcripts-folder">Transcripts Folder</label>
-                <input type="text" id="transcripts-folder" name="transcriptsFolder"
-                    value="${transcriptsFolder}"
-                    placeholder="./transcripts" />
+                <div style="display: flex; gap: 0.5rem;">
+                    <input type="text" id="transcripts-folder" name="transcriptsFolder"
+                        value="${transcriptsFolder}"
+                        placeholder="./transcripts" style="flex: 1;" />
+                    <button type="button" onclick="pickFolder('transcripts-folder', this)" class="btn secondary small-btn" title="Browse...">📂</button>
+                </div>
                 <p class="help">Folder containing audio files to transcribe</p>
             </div>
 

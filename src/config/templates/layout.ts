@@ -869,6 +869,36 @@ export function renderLayout(sections: string[], options: LayoutOptions = {}): s
         });
     }
 
+    async function pickFolder(inputId, btn) {
+        const input = document.getElementById(inputId);
+        if (!input) return;
+        
+        const originalText = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = '⏳';
+        
+        try {
+            const res = await fetch('/system/pick-folder', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ startPath: input.value || '' })
+            });
+            const data = await res.json();
+            
+            if (data.success && data.path) {
+                input.value = data.path;
+                input.dispatchEvent(new Event('change'));
+            } else if (data.error) {
+                alert(data.error);
+            }
+        } catch (e) {
+            console.error('Folder picker error:', e);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = originalText;
+        }
+    }
+
     function closeAllPluginPanels() {
         document.querySelectorAll('.plugin-panel.active').forEach(panel => {
             panel.classList.remove('active');

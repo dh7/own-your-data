@@ -273,22 +273,34 @@ sudo systemctl restart docker</code>
             <div class="form-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
                 <div>
                     <label for="path-auth">Auth Directory</label>
-                    <input type="text" id="path-auth" name="auth" value="${config.auth}" placeholder="./auth" />
+                    <div style="display: flex; gap: 0.5rem;">
+                        <input type="text" id="path-auth" name="auth" value="${config.auth}" placeholder="./auth" style="flex: 1;" />
+                        <button type="button" onclick="pickFolder('path-auth', this)" class="btn secondary small-btn" title="Browse...">📂</button>
+                    </div>
                     <p class="help">Sessions & tokens</p>
                 </div>
                 <div>
                     <label for="path-logs">Logs Directory</label>
-                    <input type="text" id="path-logs" name="logs" value="${config.logs}" placeholder="./logs" />
+                    <div style="display: flex; gap: 0.5rem;">
+                        <input type="text" id="path-logs" name="logs" value="${config.logs}" placeholder="./logs" style="flex: 1;" />
+                        <button type="button" onclick="pickFolder('path-logs', this)" class="btn secondary small-btn" title="Browse...">📂</button>
+                    </div>
                     <p class="help">Collection logs</p>
                 </div>
                 <div>
                     <label for="path-raw">Raw Dumps Directory</label>
-                    <input type="text" id="path-raw" name="rawDumps" value="${config.rawDumps}" placeholder="./raw-dumps" />
+                    <div style="display: flex; gap: 0.5rem;">
+                        <input type="text" id="path-raw" name="rawDumps" value="${config.rawDumps}" placeholder="./raw-dumps" style="flex: 1;" />
+                        <button type="button" onclick="pickFolder('path-raw', this)" class="btn secondary small-btn" title="Browse...">📂</button>
+                    </div>
                     <p class="help">Raw API data</p>
                 </div>
                 <div>
                     <label for="path-connector-data">Connector Data Directory</label>
-                    <input type="text" id="path-connector-data" name="connectorData" value="${config.connectorData || './connector_data'}" placeholder="./connector_data" />
+                    <div style="display: flex; gap: 0.5rem;">
+                        <input type="text" id="path-connector-data" name="connectorData" value="${config.connectorData || './connector_data'}" placeholder="./connector_data" style="flex: 1;" />
+                        <button type="button" onclick="pickFolder('path-connector-data', this)" class="btn secondary small-btn" title="Browse...">📂</button>
+                    </div>
                     <p class="help">Processed output</p>
                 </div>
             </div>
