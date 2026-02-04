@@ -5,17 +5,8 @@
     "description": "Import Google Contacts from CSV export",
     "version": "1.0.0",
     "folder": "gcontact",
-    "scheduler": {
-        "mode": "manual",
-        "cmd": []
-    },
     "commands": {
-        "get": "echo 'No get command for Google Contacts. Export manually.'",
         "process": "ts-node src/plugins/google-contacts/process.ts",
         "push": "ts-node src/plugins/google-contacts/push.ts"
-    },
-    "dependencies": {
-        "playwright": false,
-        "requiresLogin": false
     }
 }

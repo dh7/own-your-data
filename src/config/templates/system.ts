@@ -53,19 +53,22 @@ export function renderSystemSection(
     }
 
     // Schedule Recap Table
+    // Note: Scheduling is now centralized in config/scheduler.json
+    // This table shows plugin status only (legacy scheduler info as fallback)
     const scheduleRows = plugins.map(p => {
         const pConfig = appConfig.plugins?.[p.manifest.id];
         const enabled = pConfig?.enabled ?? true;
-        const interval = pConfig?.intervalHours ?? p.manifest.scheduler.defaultIntervalHours ?? 6;
-        const random = pConfig?.randomMinutes ?? p.manifest.scheduler.defaultRandomMinutes ?? 30;
+        const interval = pConfig?.intervalHours ?? p.manifest.scheduler?.defaultIntervalHours ?? 6;
+        const random = pConfig?.randomMinutes ?? p.manifest.scheduler?.defaultRandomMinutes ?? 30;
 
         let scheduleText = '';
-        if (p.manifest.scheduler.mode === 'interval') {
+        const mode = p.manifest.scheduler?.mode;
+        if (mode === 'interval') {
             scheduleText = `Every <strong>${interval}h</strong> ± ${random}m`;
-        } else if (p.manifest.scheduler.mode === 'manual') {
-            scheduleText = '<span style="color:#8b949e">Manual only</span>';
+        } else if (mode === 'manual' || !mode) {
+            scheduleText = '<span style="color:#8b949e">See scheduler config</span>';
         } else {
-            scheduleText = p.manifest.scheduler.mode;
+            scheduleText = mode;
         }
 
         return `
@@ -147,6 +150,17 @@ export function renderSystemSection(
                     `}
                 </div>
                 <p id="restart-status" style="margin-top: 0.5rem; font-size: 0.85em;"></p>
+            </div>
+            
+            <!-- Scheduler Settings -->
+            <div style="flex: 1; min-width: 250px; padding: 1rem; background: #0d1117; border: 1px solid #30363d; border-radius: 6px;">
+                <h4 style="margin-bottom: 0.75rem; color: #79c0ff;">⚡ Scheduler</h4>
+                <p style="color: #8b949e; margin-bottom: 0.75rem; font-size: 0.9em;">
+                    Configure when tasks run and which servers auto-start
+                </p>
+                <a href="/scheduler" class="btn" style="display: inline-block; text-decoration: none;">
+                    ⚙️ Scheduler Settings
+                </a>
             </div>
         </div>
 

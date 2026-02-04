@@ -2,22 +2,14 @@
     "id": "transcripts",
     "name": "Audio Transcripts",
     "icon": "🎙️",
-    "description": "Transcribe audio files using OpenAI Whisper API",
+    "description": "Transcribe audio files using WhisperX via Docker",
     "version": "1.0.0",
     "folder": "transcripts",
-    "scheduler": {
-        "mode": "interval",
-        "defaultIntervalHours": 12,
-        "defaultRandomMinutes": 30,
-        "cmd": [
-            "process",
-            "push"
-        ]
-    },
     "commands": {
-        "get": "",
         "process": "ts-node src/plugins/transcripts/process.ts",
         "push": "ts-node src/plugins/transcripts/push.ts"
     },
-    "dependencies": {}
+    "dependencies": {
+        "docker": true
+    }
 }

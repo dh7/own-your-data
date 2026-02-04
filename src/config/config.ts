@@ -1,5 +1,11 @@
 /**
  * Configuration types and management for all connectors
+ * 
+ * NEW STRUCTURE:
+ * - Global config: config.json (storage paths only)
+ * - Per-plugin config: config/{pluginId}.json
+ * - Scheduler config: config/scheduler.json
+ * - Example configs: src/plugins/{plugin}/config.example.json
  */
 
 import * as fs from 'fs/promises';
@@ -31,44 +37,48 @@ export interface GitHubConfig {
  */
 export interface PluginConfig {
     enabled: boolean;
-    intervalHours?: number;
-    randomMinutes?: number;
     githubPath?: string;
     [key: string]: unknown;
 }
 
 /**
  * Main app configuration (stored in config.json)
+ * Now only contains global settings - plugin configs are separate files
  */
 export interface AppConfig {
     storage: StorageConfig;
-    daemon?: DaemonConfig;
-    plugins?: Record<string, PluginConfig>;
-
-    // ========== LEGACY FIELDS (for backward compatibility) ==========
-    /** @deprecated Use plugins.whatsapp */
-    whatsapp?: { githubPath: string };
-    /** @deprecated Use plugins.twitter */
-    twitter?: { githubPath: string; accounts: string[]; tweetsPerAccount?: number };
-    /** @deprecated Use plugins.instagram */
-    instagram?: { githubPath: string; accounts: string[]; postsPerAccount?: number };
-    /** @deprecated Use plugin-level scheduling */
-    scheduler?: {
-        activeHours: { start: number; end: number };
-        twitter?: { enabled: boolean; intervalHours: number; randomMinutes: number };
-        instagram?: { enabled: boolean; intervalHours: number; randomMinutes: number };
-        push?: { enabled: boolean; intervalHours: number };
+    /** @deprecated Use config/scheduler.json instead */
+    daemon?: {
+        activeHours: {
+            start: number;
+            end: number;
+        };
     };
+    // Legacy: plugins embedded in main config (being migrated to separate files)
+    plugins?: Record<string, PluginConfig>;
 }
 
 /**
- * Daemon configuration (scheduling, etc)
+ * Scheduler configuration (stored in config/scheduler.json)
  */
-export interface DaemonConfig {
+export interface SchedulerConfig {
     activeHours: {
         start: number;
         end: number;
     };
+    /** Servers to auto-start */
+    servers: Record<string, {
+        autoStart: boolean;
+        restartOnCrash?: boolean;
+    }>;
+    /** Scheduled task groups */
+    tasks: Array<{
+        plugins: string[];
+        commands: Array<'get' | 'process' | 'push'>;
+        intervalHours?: number;
+        randomMinutes?: number;
+        schedule?: 'manual';
+    }>;
 }
 
 // ============ DEFAULTS ============
@@ -80,117 +90,154 @@ const DEFAULT_STORAGE: StorageConfig = {
     connectorData: './connector_data',
 };
 
-const CONFIG_FILE = path.join(process.cwd(), 'config.json');
+const DEFAULT_SCHEDULER: SchedulerConfig = {
+    activeHours: { start: 7, end: 23 },
+    servers: {
+        config: { autoStart: true },
+    },
+    tasks: [],
+};
 
-// ============ MIGRATION ============
+const CONFIG_FILE = path.join(process.cwd(), 'config.json');
+const CONFIG_DIR = path.join(process.cwd(), 'config');
+const SCHEDULER_CONFIG_FILE = path.join(CONFIG_DIR, 'scheduler.json');
+
+// ============ HELPERS ============
 
 /**
- * Migrate old config format to new plugin-based format
+ * Ensure config directory exists
  */
-function migrateConfig(raw: Record<string, unknown>): AppConfig {
-    const config: AppConfig = {
-        storage: { ...DEFAULT_STORAGE, ...(raw.storage as Partial<StorageConfig>) },
-        daemon: (raw.daemon as DaemonConfig) || {
-            activeHours: { start: 7, end: 23 }
-        },
-    };
-
-    // Check if already migrated (has plugins field)
-    if (raw.plugins) {
-        config.plugins = raw.plugins as Record<string, PluginConfig>;
-        return config;
-    }
-
-    // Migrate from old format
-    const plugins: Record<string, PluginConfig> = {};
-
-    // Migrate Instagram
-    const oldInstagram = raw.instagram as { githubPath?: string; accounts?: string[]; postsPerAccount?: number } | undefined;
-    const oldInstaScheduler = (raw.scheduler as any)?.instagram;
-    if (oldInstagram) {
-        plugins.instagram = {
-            enabled: oldInstaScheduler?.enabled ?? true,
-            intervalHours: oldInstaScheduler?.intervalHours ?? 6,
-            randomMinutes: oldInstaScheduler?.randomMinutes ?? 30,
-            accounts: oldInstagram.accounts || [],
-            postsPerAccount: oldInstagram.postsPerAccount || 50,
-            githubPath: oldInstagram.githubPath || 'instagram',
-        };
-    }
-
-    // Migrate Twitter
-    const oldTwitter = raw.twitter as { githubPath?: string; accounts?: string[]; tweetsPerAccount?: number } | undefined;
-    const oldTwitterScheduler = (raw.scheduler as any)?.twitter;
-    if (oldTwitter) {
-        plugins.twitter = {
-            enabled: oldTwitterScheduler?.enabled ?? true,
-            intervalHours: oldTwitterScheduler?.intervalHours ?? 6,
-            randomMinutes: oldTwitterScheduler?.randomMinutes ?? 30,
-            accounts: oldTwitter.accounts || [],
-            tweetsPerAccount: oldTwitter.tweetsPerAccount || 100,
-            githubPath: oldTwitter.githubPath || 'twitter',
-        };
-    }
-
-    // Migrate WhatsApp
-    const oldWhatsApp = raw.whatsapp as { githubPath?: string } | undefined;
-    if (oldWhatsApp) {
-        plugins.whatsapp = {
-            enabled: true,
-            githubPath: oldWhatsApp.githubPath || 'whatsapp',
-        };
-    }
-
-    if (Object.keys(plugins).length > 0) {
-        config.plugins = plugins;
-    }
-
-    // Keep legacy fields for backward compatibility during transition
-    if (raw.whatsapp) config.whatsapp = raw.whatsapp as AppConfig['whatsapp'];
-    if (raw.twitter) config.twitter = raw.twitter as AppConfig['twitter'];
-    if (raw.instagram) config.instagram = raw.instagram as AppConfig['instagram'];
-    if (raw.scheduler) config.scheduler = raw.scheduler as AppConfig['scheduler'];
-
-    return config;
+async function ensureConfigDir(): Promise<void> {
+    await fs.mkdir(CONFIG_DIR, { recursive: true });
 }
 
-// ============ LOAD/SAVE ============
+/**
+ * Get path to a plugin's config file
+ */
+function getPluginConfigPath(pluginId: string): string {
+    return path.join(CONFIG_DIR, `${pluginId}.json`);
+}
 
 /**
- * Load app config from config.json (or return defaults)
+ * Get path to a plugin's example config file
+ */
+function getPluginExampleConfigPath(pluginId: string): string {
+    return path.join(process.cwd(), 'src', 'plugins', pluginId, 'config.example.json');
+}
+
+// ============ LOAD/SAVE: GLOBAL CONFIG ============
+
+/**
+ * Load global app config from config.json (or return defaults)
  */
 export async function loadConfig(): Promise<AppConfig> {
     try {
         const data = await fs.readFile(CONFIG_FILE, 'utf-8');
         const raw = JSON.parse(data);
-        return migrateConfig(raw);
+        return {
+            storage: { ...DEFAULT_STORAGE, ...(raw.storage || {}) },
+            daemon: raw.daemon, // Legacy - scheduler now in config/scheduler.json
+            plugins: raw.plugins, // Legacy - keep for migration
+        };
     } catch {
         return { storage: DEFAULT_STORAGE };
     }
 }
 
 /**
- * Save app config to config.json
+ * Save global app config to config.json
  */
 export async function saveConfig(config: AppConfig): Promise<void> {
     await fs.writeFile(CONFIG_FILE, JSON.stringify(config, null, 2));
 }
 
+// ============ LOAD/SAVE: PLUGIN CONFIG ============
+
 /**
- * Get plugin config by ID
+ * Load a plugin's config from config/{pluginId}.json
+ * Falls back to example config if not found
+ */
+export async function loadPluginConfig<T extends PluginConfig = PluginConfig>(pluginId: string): Promise<T> {
+    const configPath = getPluginConfigPath(pluginId);
+    const examplePath = getPluginExampleConfigPath(pluginId);
+
+    try {
+        // Try loading existing config
+        const data = await fs.readFile(configPath, 'utf-8');
+        return JSON.parse(data) as T;
+    } catch {
+        // Fall back to example config
+        try {
+            const exampleData = await fs.readFile(examplePath, 'utf-8');
+            const exampleConfig = JSON.parse(exampleData) as T;
+            // Save it as the actual config
+            await savePluginConfig(pluginId, exampleConfig);
+            return exampleConfig;
+        } catch {
+            // Return minimal default
+            return { enabled: false } as T;
+        }
+    }
+}
+
+/**
+ * Save a plugin's config to config/{pluginId}.json
+ */
+export async function savePluginConfig(pluginId: string, config: PluginConfig): Promise<void> {
+    await ensureConfigDir();
+    const configPath = getPluginConfigPath(pluginId);
+    await fs.writeFile(configPath, JSON.stringify(config, null, 2));
+}
+
+/**
+ * Check if plugin has a config file
+ */
+export async function hasPluginConfig(pluginId: string): Promise<boolean> {
+    try {
+        await fs.access(getPluginConfigPath(pluginId));
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * @deprecated Use loadPluginConfig() instead - kept for backward compatibility
  */
 export function getPluginConfig(config: AppConfig, pluginId: string): PluginConfig | undefined {
     return config.plugins?.[pluginId];
 }
 
 /**
- * Set plugin config by ID
+ * @deprecated Use savePluginConfig() instead - kept for backward compatibility  
  */
 export function setPluginConfig(config: AppConfig, pluginId: string, pluginConfig: PluginConfig): void {
     if (!config.plugins) {
         config.plugins = {};
     }
     config.plugins[pluginId] = pluginConfig;
+}
+
+// ============ LOAD/SAVE: SCHEDULER CONFIG ============
+
+/**
+ * Load scheduler config from config/scheduler.json
+ */
+export async function loadSchedulerConfig(): Promise<SchedulerConfig> {
+    try {
+        const data = await fs.readFile(SCHEDULER_CONFIG_FILE, 'utf-8');
+        return JSON.parse(data) as SchedulerConfig;
+    } catch {
+        return DEFAULT_SCHEDULER;
+    }
+}
+
+/**
+ * Save scheduler config to config/scheduler.json
+ */
+export async function saveSchedulerConfig(config: SchedulerConfig): Promise<void> {
+    await ensureConfigDir();
+    await fs.writeFile(SCHEDULER_CONFIG_FILE, JSON.stringify(config, null, 2));
 }
 
 // ============ RESOLVED PATHS ============

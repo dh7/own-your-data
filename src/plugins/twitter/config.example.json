@@ -1,0 +1,6 @@
+{
+    "enabled": true,
+    "accounts": [],
+    "tweetsPerAccount": 100,
+    "githubPath": "twitter"
+}

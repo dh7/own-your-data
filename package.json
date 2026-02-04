@@ -4,32 +4,36 @@
   "description": "Local-first data connectors with GitHub sync",
   "main": "dist/index.js",
   "scripts": {
+    "start": "ts-node src/scheduler/index.ts",
     "config": "ts-node src/config/server.ts",
-    "get_all": "ts-node src/get_all.ts",
-    "process_all": "ts-node src/process_all.ts",
-    "push_all": "ts-node src/push_all.ts",
-    "push": "ts-node src/push.ts",
-    "whatsapp:get": "ts-node src/plugins/whatsapp/get.ts",
-    "whatsapp:process": "ts-node src/plugins/whatsapp/process.ts",
-    "whatsapp:push": "ts-node src/plugins/whatsapp/push.ts",
+    
     "twitter:get": "ts-node src/plugins/twitter/get.ts",
     "twitter:process": "ts-node src/plugins/twitter/process.ts",
     "twitter:push": "ts-node src/plugins/twitter/push.ts",
+    
     "instagram:get": "ts-node src/plugins/instagram/get.ts",
     "instagram:process": "ts-node src/plugins/instagram/process.ts",
     "instagram:push": "ts-node src/plugins/instagram/push.ts",
+    
+    "whatsapp:server": "ts-node src/plugins/whatsapp/get.ts",
+    "whatsapp:process": "ts-node src/plugins/whatsapp/process.ts",
+    "whatsapp:push": "ts-node src/plugins/whatsapp/push.ts",
+    
+    "chrome-history:server": "ts-node src/plugins/chrome-history/server.ts",
+    "chrome-history:push": "ts-node src/plugins/chrome-history/push.ts",
+    
     "linkedin:process": "ts-node src/plugins/linkedin/process.ts",
     "linkedin:push": "ts-node src/plugins/linkedin/push.ts",
+    
     "google-contacts:process": "ts-node src/plugins/google-contacts/process.ts",
     "google-contacts:push": "ts-node src/plugins/google-contacts/push.ts",
-    "gcontact:process": "ts-node src/plugins/google-contacts/process.ts",
-    "gcontact:push": "ts-node src/plugins/google-contacts/push.ts",
+    
     "openai:process": "ts-node src/plugins/openai/process.ts",
     "openai:push": "ts-node src/plugins/openai/push.ts",
-    "chrome:server": "ts-node src/plugins/chrome-history/server.ts",
-    "chrome:push": "ts-node src/plugins/chrome-history/push.ts",
-    "transcript:process": "ts-node src/plugins/transcripts/process.ts",
-    "transcript:push": "ts-node src/plugins/transcripts/push.ts",
+    
+    "transcripts:process": "ts-node src/plugins/transcripts/process.ts",
+    "transcripts:push": "ts-node src/plugins/transcripts/push.ts",
+    
     "build": "tsc",
     "test": "echo \"Error: no test specified\" && exit 1"
   },

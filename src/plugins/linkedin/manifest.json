@@ -5,17 +5,8 @@
     "description": "Import LinkedIn connections from CSV export",
     "version": "1.0.0",
     "folder": "linkedin",
-    "scheduler": {
-        "mode": "manual",
-        "cmd": []
-    },
     "commands": {
-        "get": "echo 'No get command for LinkedIn. Export manually.'",
         "process": "ts-node src/plugins/linkedin/process.ts",
         "push": "ts-node src/plugins/linkedin/push.ts"
-    },
-    "dependencies": {
-        "playwright": false,
-        "requiresLogin": false
     }
 }

@@ -14,7 +14,7 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import { exec } from 'child_process';
 import multer from 'multer';
-import { saveGitHubConfig, loadGitHubConfig, loadConfig, saveConfig, getResolvedPaths, setPluginConfig } from './config';
+import { saveGitHubConfig, loadGitHubConfig, loadConfig, saveConfig, getResolvedPaths, setPluginConfig, loadPluginConfig, savePluginConfig, loadSchedulerConfig, saveSchedulerConfig, SchedulerConfig } from './config';
 import { useSingleFileAuthState } from '../shared/auth-utils';
 import { discoverPlugins, loadPluginModule } from '../plugins';
 
@@ -24,6 +24,7 @@ import { renderSystemSection, renderPluginsDivider, TunnelRouteInfo } from './te
 import { renderGitHubSection } from './templates/github';
 import { renderFileBrowserSection } from './templates/filebrowser';
 import { renderDomainSection, TunnelPluginInfo } from './templates/domain';
+import { renderSchedulerSettingsPage, PluginInfo } from './templates/scheduler';
 
 // Tunnel
 import {
@@ -384,24 +385,69 @@ app.post('/github', async (req, res) => {
 // Generic plugin config save route
 app.post('/plugin/:id', async (req, res) => {
   const pluginId = req.params.id;
+  const isAjax = req.headers['x-requested-with'] === 'XMLHttpRequest' || req.query.ajax === 'true';
 
   try {
     const plugin = await loadPluginModule(pluginId);
     if (!plugin) {
+      if (isAjax) {
+        return res.status(404).json({ error: `Plugin not found: ${pluginId}` });
+      }
       res.status(404).send(`Plugin not found: ${pluginId}`);
       return;
     }
 
-    const config = await loadConfig();
+    // Parse and save to per-plugin config file
     const pluginConfig = plugin.parseFormData(req.body);
-    setPluginConfig(config, pluginId, pluginConfig);
-    await saveConfig(config);
+    await savePluginConfig(pluginId, pluginConfig);
 
-    console.log(`✅ ${plugin.manifest.name} config saved`);
+    console.log(`✅ ${plugin.manifest.name} config saved to config/${pluginId}.json`);
+
+    if (isAjax) {
+      // Return JSON success for AJAX requests
+      return res.json({ success: true, message: `${plugin.manifest.name} config saved` });
+    }
+
     res.redirect(`/?saved=${pluginId}`);
   } catch (e: any) {
     console.error(`Failed to save plugin ${pluginId}:`, e);
+    if (isAjax) {
+      return res.status(500).json({ error: e.message });
+    }
     res.status(500).send(`Failed to save: ${e.message}`);
+  }
+});
+
+// Get plugin HTML section for AJAX reloading
+app.get('/plugin/:id/html', async (req, res) => {
+  const pluginId = req.params.id;
+
+  try {
+    const plugin = await loadPluginModule(pluginId);
+    if (!plugin) {
+      return res.status(404).json({ error: `Plugin not found: ${pluginId}` });
+    }
+
+    // Load config from per-plugin config file
+    const pluginConfig = await loadPluginConfig(pluginId);
+
+    // Get render data
+    const playwrightStatus = await checkPlaywright();
+    const config = await loadConfig();
+    const paths = getResolvedPaths(config);
+    const isLoggedIn = await checkInstagramAuth(paths);
+
+    const data = {
+      playwrightInstalled: playwrightStatus.browsers,
+      isLoggedIn,
+      justSaved: req.query.saved === pluginId,
+    };
+
+    const html = plugin.renderTemplate(pluginConfig, data);
+    res.send(html);
+  } catch (e: any) {
+    console.error(`Failed to render plugin ${pluginId}:`, e);
+    res.status(500).json({ error: e.message });
   }
 });
 
@@ -1396,6 +1442,97 @@ app.get('/dependencies/check-docker', async (req, res) => {
 
 app.get('/status', (req, res) => {
   res.json({ qr: currentQR, connected: whatsappConnected, status: connectionStatus });
+});
+
+// Scheduler status proxy - forwards to scheduler's status API
+app.get('/scheduler/status', async (req, res) => {
+  try {
+    const response = await fetch('http://localhost:3455/status');
+    if (response.ok) {
+      const data = await response.json();
+      res.json(data);
+    } else {
+      res.json({ running: false, error: 'Scheduler not running' });
+    }
+  } catch {
+    res.json({ running: false, error: 'Scheduler not reachable' });
+  }
+});
+
+// Scheduler process control - forwards to scheduler's API
+app.post('/scheduler/processes/:name/:action', async (req, res) => {
+  const { name, action } = req.params;
+  if (!['start', 'stop', 'restart'].includes(action)) {
+    return res.status(400).json({ error: 'Invalid action' });
+  }
+
+  try {
+    const response = await fetch(`http://localhost:3455/processes/${name}/${action}`, {
+      method: 'POST',
+    });
+    const data = await response.json();
+    res.json(data);
+  } catch {
+    res.status(503).json({ error: 'Scheduler not reachable' });
+  }
+});
+
+// Run a task via scheduler
+app.post('/scheduler/tasks/run/:plugin/:command', async (req, res) => {
+  const { plugin, command } = req.params;
+
+  try {
+    const response = await fetch(`http://localhost:3455/tasks/run/${plugin}/${command}`, {
+      method: 'POST',
+    });
+    const data = await response.json();
+    res.json(data);
+  } catch {
+    res.status(503).json({ error: 'Scheduler not reachable' });
+  }
+});
+
+// Scheduler settings page
+app.get('/scheduler', async (req, res) => {
+  const schedulerConfig = await loadSchedulerConfig();
+  const plugins = await discoverPlugins();
+  
+  // Build plugin info for the template
+  const pluginInfos: PluginInfo[] = plugins.map(p => ({
+    id: p.manifest.id,
+    name: p.manifest.name,
+    icon: p.manifest.icon,
+    hasServer: !!p.manifest.commands.server,
+    commands: Object.keys(p.manifest.commands).filter(k => p.manifest.commands[k as keyof typeof p.manifest.commands]),
+  }));
+  
+  const html = renderSchedulerSettingsPage(schedulerConfig, pluginInfos);
+  res.send(html);
+});
+
+// Save scheduler config
+app.post('/scheduler/config', async (req, res) => {
+  try {
+    const config = req.body as SchedulerConfig;
+    
+    // Validate
+    if (!config.activeHours || typeof config.activeHours.start !== 'number') {
+      return res.status(400).json({ error: 'Invalid activeHours' });
+    }
+    if (!config.servers || typeof config.servers !== 'object') {
+      return res.status(400).json({ error: 'Invalid servers' });
+    }
+    if (!Array.isArray(config.tasks)) {
+      return res.status(400).json({ error: 'Invalid tasks' });
+    }
+    
+    await saveSchedulerConfig(config);
+    console.log('✅ Scheduler config saved');
+    res.json({ success: true });
+  } catch (e: any) {
+    console.error('Failed to save scheduler config:', e);
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // Test GitHub connection

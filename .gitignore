@@ -26,6 +26,8 @@ tweets/
 
 # Local Config
 config.json
+config/*.json
+!config/*.example.json
 
 # Environment
 .env

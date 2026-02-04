@@ -23,8 +23,6 @@ export interface TwitterPluginConfig extends BasePluginConfig {
  */
 export const DEFAULT_CONFIG: TwitterPluginConfig = {
     enabled: true,
-    intervalHours: 6,
-    randomMinutes: 30,
     accounts: [],
     tweetsPerAccount: 100,
     githubPath: 'twitter',

@@ -5,14 +5,8 @@
     "description": "Collect WhatsApp messages (real-time listener)",
     "version": "1.0.0",
     "folder": "whatsapp",
-    "scheduler": {
-        "mode": "realtime",
-        "cmd": [
-            "push"
-        ]
-    },
     "commands": {
-        "get": "ts-node src/plugins/whatsapp/get.ts",
+        "server": "ts-node src/plugins/whatsapp/get.ts",
         "process": "ts-node src/plugins/whatsapp/process.ts",
         "push": "ts-node src/plugins/whatsapp/push.ts"
     }

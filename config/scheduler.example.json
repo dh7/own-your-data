@@ -1,0 +1,51 @@
+{
+    "activeHours": {
+        "start": 7,
+        "end": 23
+    },
+    "servers": {
+        "config": {
+            "autoStart": true,
+            "restartOnCrash": true
+        },
+        "chrome-history": {
+            "autoStart": true,
+            "restartOnCrash": true
+        },
+        "whatsapp": {
+            "autoStart": true,
+            "restartOnCrash": true
+        }
+    },
+    "tasks": [
+        {
+            "plugins": ["twitter", "instagram"],
+            "commands": ["get", "process", "push"],
+            "intervalHours": 6,
+            "randomMinutes": 30
+        },
+        {
+            "plugins": ["whatsapp"],
+            "commands": ["process", "push"],
+            "intervalHours": 1,
+            "randomMinutes": 10
+        },
+        {
+            "plugins": ["chrome-history"],
+            "commands": ["push"],
+            "intervalHours": 24,
+            "randomMinutes": 60
+        },
+        {
+            "plugins": ["transcripts"],
+            "commands": ["process", "push"],
+            "intervalHours": 12,
+            "randomMinutes": 30
+        },
+        {
+            "plugins": ["linkedin", "google-contacts", "openai"],
+            "commands": ["process", "push"],
+            "schedule": "manual"
+        }
+    ]
+}

@@ -18,8 +18,6 @@ export function renderTemplate(
     const accounts = cfg.accounts || [];
     const githubPath = cfg.githubPath || DEFAULT_CONFIG.githubPath;
     const tweetsPerAccount = cfg.tweetsPerAccount || DEFAULT_CONFIG.tweetsPerAccount;
-    const intervalHours = cfg.intervalHours ?? DEFAULT_CONFIG.intervalHours;
-    const randomMinutes = cfg.randomMinutes ?? DEFAULT_CONFIG.randomMinutes;
     const enabled = cfg.enabled ?? DEFAULT_CONFIG.enabled;
 
     const isReady = data.playwrightInstalled && accounts.length > 0;
@@ -51,21 +49,15 @@ export function renderTemplate(
         </p>
 
         <form action="/plugin/twitter" method="POST">
-            <!-- Scheduling -->
-            <h4 style="margin-bottom: 0.75rem; color: #aaa;">⏰ Scheduling</h4>
-            <div class="schedule-row" style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem; padding: 0.75rem; background: #0a0a0a; border: 1px solid #333; border-radius: 4px;">
+            <!-- Enable -->
+            <div style="margin-bottom: 1.5rem; padding: 0.75rem; background: #0a0a0a; border: 1px solid #333; border-radius: 4px;">
                 <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
                     <input type="checkbox" name="enabled" ${enabled ? 'checked' : ''} />
-                    Enable scheduling
+                    Enable plugin
                 </label>
-                <div style="display: flex; align-items: center; gap: 0.5rem; color: #aaa;">
-                    <span>Every</span>
-                    <input type="number" name="intervalHours" value="${intervalHours}" min="1" max="24" style="width: 60px;" />
-                    <span>hours</span>
-                    <span style="color: #666; margin-left: 0.5rem;">±</span>
-                    <input type="number" name="randomMinutes" value="${randomMinutes}" min="0" max="120" style="width: 60px;" />
-                    <span>min</span>
-                </div>
+                <p style="margin: 0.5rem 0 0 0; color: #666; font-size: 12px;">
+                    Scheduling is configured in <code>config/scheduler.json</code>
+                </p>
             </div>
 
             <h4 style="margin-bottom: 0.75rem; color: #aaa;">📋 Accounts</h4>
@@ -168,8 +160,6 @@ export function parseFormData(body: Record<string, string>): TwitterPluginConfig
 
     return {
         enabled: body.enabled === 'on',
-        intervalHours: parseInt(body.intervalHours) || DEFAULT_CONFIG.intervalHours,
-        randomMinutes: parseInt(body.randomMinutes) || DEFAULT_CONFIG.randomMinutes,
         accounts,
         tweetsPerAccount: parseInt(body.tweetsPerAccount) || DEFAULT_CONFIG.tweetsPerAccount,
         githubPath: body.githubPath || DEFAULT_CONFIG.githubPath,

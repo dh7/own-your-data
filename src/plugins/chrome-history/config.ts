@@ -13,12 +13,12 @@ export interface ChromeHistoryPluginConfig extends BasePluginConfig {
     daysToSync: number;
     /** Server port for receiving extension data */
     serverPort: number;
+    /** API key for extension authentication (optional, auto-generated if not set) */
+    apiKey?: string;
 }
 
 export const DEFAULT_CONFIG: ChromeHistoryPluginConfig = {
     enabled: true,
-    intervalHours: 24,
-    randomMinutes: 60,
     folderName: 'chrome-history',
     githubPath: 'chrome-history',
     daysToSync: 30,

@@ -106,19 +106,25 @@ export async function loadPluginModule(id: string): Promise<Plugin | undefined> 
 }
 
 /**
- * Get all plugins with interval scheduling mode
+ * Get all plugins that have a specific command
  */
-export async function getIntervalPlugins(): Promise<DiscoveredPlugin[]> {
+export async function getPluginsWithCommand(command: string): Promise<DiscoveredPlugin[]> {
     const plugins = await discoverPlugins();
-    return plugins.filter(p => p.manifest.scheduler.mode === 'interval');
+    return plugins.filter(p => command in p.manifest.commands);
 }
 
 /**
- * Get all plugins with realtime scheduling mode
+ * Get all plugins that have a server command
  */
-export async function getRealtimePlugins(): Promise<DiscoveredPlugin[]> {
-    const plugins = await discoverPlugins();
-    return plugins.filter(p => p.manifest.scheduler.mode === 'realtime');
+export async function getServerPlugins(): Promise<DiscoveredPlugin[]> {
+    return getPluginsWithCommand('server');
+}
+
+/**
+ * Generate npm script name for a plugin command
+ */
+export function getNpmScriptName(pluginId: string, command: string): string {
+    return `${pluginId}:${command}`;
 }
 
 /**

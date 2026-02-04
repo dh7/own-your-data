@@ -2,20 +2,26 @@
  * Plugin system types
  *
  * Defines the contract that all plugins must follow.
+ * Plugins declare capabilities (commands) only - scheduling is centralized.
  */
 
 /**
- * Scheduler mode for a plugin
- * - interval: Runs periodically (e.g., Twitter, Instagram)
- * - realtime: Runs continuously as a listener (e.g., WhatsApp)
+ * Available command types
+ */
+export type PluginCommand = 'get' | 'process' | 'push' | 'server' | 'config';
+
+/**
+ * Scheduler mode for a plugin (legacy - used for backward compatibility)
+ * @deprecated Use config/scheduler.json for scheduling
  */
 export type SchedulerMode = 'interval' | 'realtime' | 'manual';
 
 /**
  * Plugin manifest - stored in manifest.json in each plugin folder
+ * Declares capabilities only, no scheduling (that's in config/scheduler.json)
  */
 export interface PluginManifest {
-    /** Unique identifier, used in config.json and routes */
+    /** Unique identifier, used in config and routes */
     id: string;
 
     /** Human-readable name */
@@ -36,25 +42,32 @@ export interface PluginManifest {
      */
     folder: string;
 
-    /** Scheduler configuration */
-    scheduler: {
-        mode: SchedulerMode;
-        /** Default interval in hours (for interval mode) */
-        defaultIntervalHours?: number;
-        /** Default random variance in minutes (for interval mode) */
-        defaultRandomMinutes?: number;
-        /** Commands to run on schedule (e.g., ["get", "process", "push"]) */
-        cmd: Array<'get' | 'process' | 'push'>;
-    };
-
-    /** Commands to execute for each phase */
+    /** 
+     * Commands this plugin supports
+     * Each command maps to an npm script: npm run {pluginId}:{command}
+     */
     commands: {
         /** Fetch raw data from source → raw-dumps/{folder}/ */
-        get: string;
+        get?: string;
+        /** Long-running server (e.g., WhatsApp listener, Chrome history receiver) */
+        server?: string;
         /** Process raw data → connector_data/{folder}/ */
         process?: string;
         /** Push to GitHub */
-        push: string;
+        push?: string;
+        /** Standalone config UI server */
+        config?: string;
+    };
+
+    /** 
+     * @deprecated Scheduling moved to config/scheduler.json
+     * Kept for backward compatibility with get_all.ts
+     */
+    scheduler?: {
+        mode: SchedulerMode;
+        defaultIntervalHours?: number;
+        defaultRandomMinutes?: number;
+        cmd?: Array<'get' | 'process' | 'push'>;
     };
 
     /** Optional dependencies information */
@@ -65,6 +78,8 @@ export interface PluginManifest {
         requiresLogin?: boolean;
         /** Requires Chrome extension */
         chromeExtension?: boolean;
+        /** Requires Docker */
+        docker?: boolean;
     };
 
     /** Tunnel configuration for exposing routes via Cloudflare Tunnel */
@@ -96,17 +111,12 @@ export interface TunnelConfig {
 }
 
 /**
- * Base plugin config stored in config.json under plugins.{id}
+ * Base plugin config stored in config/{pluginId}.json
+ * Scheduling is handled separately in config/scheduler.json
  */
 export interface BasePluginConfig {
-    /** Whether this plugin is enabled for scheduling */
+    /** Whether this plugin is enabled */
     enabled: boolean;
-
-    /** Interval hours (for interval mode plugins) */
-    intervalHours?: number;
-
-    /** Random variance in minutes (for interval mode plugins) */
-    randomMinutes?: number;
 
     /** GitHub path for this plugin's data */
     githubPath?: string;

@@ -7,6 +7,8 @@ import { BasePluginConfig } from '../types';
 export interface GoogleContactsPluginConfig extends BasePluginConfig {
     /** Folder name for raw dumps in raw-dumps/ directory */
     folderName: string;
+    /** GitHub path for this plugin's data */
+    githubPath?: string;
 }
 
 /**

@@ -1,0 +1,8 @@
+{
+    "enabled": true,
+    "transcriptsFolder": "./transcripts",
+    "model": "base",
+    "device": "cpu",
+    "computeType": "int8",
+    "githubPath": "transcripts"
+}

@@ -1,6 +1,8 @@
 /**
  * Chrome History PUSH script - Sync browsing history to GitHub using MindCache
  * Run: npm run chrome:push
+ * 
+ * Creates one file per day, with one key per domain
  */
 
 import * as fs from 'fs/promises';
@@ -46,7 +48,7 @@ async function loadHistoryFiles(rawDumpsDir: string, daysToSync: number): Promis
 }
 
 /**
- * Group URLs by domain for better organization
+ * Group URLs by domain
  */
 function groupByDomain(urls: UrlEntry[]): Map<string, UrlEntry[]> {
     const byDomain = new Map<string, UrlEntry[]>();
@@ -67,44 +69,52 @@ function groupByDomain(urls: UrlEntry[]): Map<string, UrlEntry[]> {
 }
 
 /**
- * Format a day's browsing history as markdown
+ * Format domain URLs as markdown content
  */
-function formatDayAsMarkdown(date: string, urls: UrlEntry[]): string {
-    const lines = [`# Browsing History: ${date}`, ''];
+function formatDomainContent(domain: string, urls: UrlEntry[]): string {
+    const lines: string[] = [];
 
-    // Group by domain
+    // Sort by timestamp
+    urls.sort((a, b) =>
+        new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+    );
+
+    for (const entry of urls) {
+        const time = new Date(entry.timestamp).toLocaleTimeString('en-US', {
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+        const title = entry.title || 'Untitled';
+        // Escape markdown special chars in title
+        const safeTitle = title.replace(/[[\]]/g, '\\$&');
+        lines.push(`- ${time} [${safeTitle}](${entry.url})`);
+    }
+
+    return lines.join('\n');
+}
+
+/**
+ * Create MindCache for a single day with one key per domain
+ */
+function createDayMindCache(date: string, urls: UrlEntry[]): MindCache {
+    const mindcache = new MindCache();
     const byDomain = groupByDomain(urls);
 
     // Sort domains by visit count
     const sortedDomains = [...byDomain.entries()]
         .sort((a, b) => b[1].length - a[1].length);
 
-    lines.push(`Total visits: ${urls.length} | Domains: ${sortedDomains.length}`);
-    lines.push('');
-
     for (const [domain, domainUrls] of sortedDomains) {
-        lines.push(`## ${domain} (${domainUrls.length})`);
-        lines.push('');
+        const keyName = domain;
+        const content = formatDomainContent(domain, domainUrls);
 
-        // Sort by timestamp
-        domainUrls.sort((a, b) =>
-            new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-        );
-
-        for (const entry of domainUrls) {
-            const time = new Date(entry.timestamp).toLocaleTimeString('en-US', {
-                hour: '2-digit',
-                minute: '2-digit'
-            });
-            const title = entry.title || 'Untitled';
-            // Escape markdown special chars in title
-            const safeTitle = title.replace(/[[\]]/g, '\\$&');
-            lines.push(`- ${time} [${safeTitle}](${entry.url})`);
-        }
-        lines.push('');
+        mindcache.set_value(keyName, content, {
+            contentTags: [date, 'chrome', domain],
+            zIndex: 0
+        });
     }
 
-    return lines.join('\n');
+    return mindcache;
 }
 
 async function main() {
@@ -144,40 +154,31 @@ async function main() {
 
     console.log(`   📊 Found ${historyByDate.size} days of history`);
 
-    // Create MindCache with all history
-    const mindcache = new MindCache();
-
     let totalUrls = 0;
+    let totalDomains = 0;
 
+    // Create one file per day
     for (const [date, urls] of historyByDate) {
-        const key = `chrome_history_${date.replace(/-/g, '_')}`;
-        const markdown = formatDayAsMarkdown(date, urls);
+        const mindcache = createDayMindCache(date, urls);
+        const domainCount = groupByDomain(urls).size;
 
-        mindcache.set_value(key, markdown, {
-            contentTags: ['chrome', 'history', 'browsing', date],
-            zIndex: 0
+        const syncFile = `${githubPath}/chrome-history-${date}.md`;
+        const sync = new MindCacheSync(gitStore, mindcache, {
+            filePath: syncFile,
+            instanceName: `Chrome History ${date}`,
         });
 
-        totalUrls += urls.length;
-        console.log(`   📅 ${date}: ${urls.length} URLs`);
+        try {
+            await sync.save({ message: `Chrome ${date}: ${urls.length} URLs, ${domainCount} domains` });
+            console.log(`   ✅ ${date}: ${urls.length} URLs, ${domainCount} domains → ${syncFile}`);
+            totalUrls += urls.length;
+            totalDomains += domainCount;
+        } catch (error: any) {
+            console.error(`   ❌ ${date}: Failed - ${error.message}`);
+        }
     }
 
-    mindcache.set('last_sync_chrome_history', new Date().toISOString());
-
-    // Sync to GitHub
-    const syncFile = `${githubPath}/history.md`;
-    const sync = new MindCacheSync(gitStore, mindcache, {
-        filePath: syncFile,
-        instanceName: 'Chrome History',
-    });
-
-    try {
-        await sync.save({ message: `Chrome: ${historyByDate.size} days, ${totalUrls} URLs` });
-        console.log(`   ✅ Synced ${totalUrls} URLs across ${historyByDate.size} days to ${syncFile}`);
-    } catch (error: any) {
-        console.error(`   ❌ Failed to sync: ${error.message}`);
-    }
-
+    console.log(`\n📊 Summary: ${totalUrls} URLs, ${totalDomains} domains across ${historyByDate.size} days`);
     console.log('✨ Done!');
 }
 

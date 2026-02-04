@@ -5,16 +5,6 @@
     "description": "Scrape posts from Instagram accounts",
     "version": "1.0.0",
     "folder": "instagram",
-    "scheduler": {
-        "mode": "interval",
-        "defaultIntervalHours": 6,
-        "defaultRandomMinutes": 30,
-        "cmd": [
-            "get",
-            "process",
-            "push"
-        ]
-    },
     "commands": {
         "get": "ts-node src/plugins/instagram/get.ts",
         "process": "ts-node src/plugins/instagram/process.ts",

@@ -1,0 +1,7 @@
+{
+    "enabled": true,
+    "folderName": "chrome-history",
+    "githubPath": "chrome-history",
+    "daysToSync": 30,
+    "serverPort": 3457
+}
