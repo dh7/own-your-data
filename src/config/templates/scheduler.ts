@@ -101,8 +101,9 @@ export function renderSchedulerSection(
         ? '<span class="status connected">🔥 Running</span>'
         : '<span class="status pending">⏸ Stopped</span>';
 
-    const systemServices = data.services.filter(service => service.id === 'config-server' || service.id === 'daemon');
-    const pluginServices = data.services.filter(service => service.id !== 'config-server' && service.id !== 'daemon');
+    const systemServiceIds = ['config-server', 'daemon', 'tunnel'];
+    const systemServices = data.services.filter(service => systemServiceIds.includes(service.id));
+    const pluginServices = data.services.filter(service => !systemServiceIds.includes(service.id));
     const systemServiceRows = renderServiceRows(systemServices, 'No system services detected.');
     const pluginServiceRows = renderServiceRows(pluginServices, 'No plugin services detected.');
 

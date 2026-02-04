@@ -532,6 +532,17 @@ app.get('/', async (req, res) => {
         ]
         : [{ action: 'start', label: 'Start' }],
     },
+    {
+      id: 'tunnel',
+      name: 'Cloudflare Tunnel',
+      icon: '☁️',
+      running: tunnelStatus.tunnelRunning,
+      description: tunnelStatus.tunnelConfigured ? 'Exposes services via Cloudflare' : 'Not configured',
+      detail: tunnelStatus.tunnelRunning
+        ? (tunnelStatus.tunnelUrl || `Proxy on port ${PROXY_PORT}`)
+        : (tunnelStatus.tunnelConfigured ? 'Ready to start' : 'Configure in Domain section'),
+      actions: [], // Controls are in Your Domain section
+    },
   ];
 
   for (const plugin of plugins) {
@@ -1573,6 +1584,30 @@ app.post('/system/service/:id/:action', async (req, res) => {
       }
 
       res.json({ success: true, message: `Daemon ${action} complete` });
+      return;
+    }
+
+    // Handle tunnel service
+    if (serviceId === 'tunnel') {
+      if (action === 'start') {
+        const result = await startTunnelWithToken();
+        if (!result.success) {
+          res.json({ success: false, error: result.message });
+          return;
+        }
+      } else if (action === 'stop') {
+        await stopTunnel();
+      } else {
+        await stopTunnel();
+        await new Promise(resolve => setTimeout(resolve, 500));
+        const result = await startTunnelWithToken();
+        if (!result.success) {
+          res.json({ success: false, error: result.message });
+          return;
+        }
+      }
+
+      res.json({ success: true, message: `Tunnel ${action} complete` });
       return;
     }
 
