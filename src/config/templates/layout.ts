@@ -510,9 +510,10 @@ export function renderLayout(sections: string[], options: LayoutOptions = {}): s
             align-items: center;
         }
         .log-viewer-body {
-            overflow: auto;
+            overflow-y: auto;
             padding: 1rem;
             flex: 1;
+            min-height: 0;
         }
         .log-viewer-body pre {
             margin: 0;
