@@ -78,16 +78,19 @@ function renderServiceRows(services: SchedulerServiceStatus[], emptyLabel: strin
         const icon = service.icon || '🖥️';
         const statusColor = service.running ? '#7ee787' : '#f85149';
         const statusLabel = service.running ? 'Running' : 'Stopped';
+        const logsBtn = service.id !== 'config-server'
+            ? ` <button type="button" class="btn small-btn secondary" onclick="viewServiceLogs('${service.id}')">Logs</button>`
+            : '';
         return `
-        <tr>
+        <tr data-service-id="${service.id}">
             <td style="padding: 0.65rem;">
                 ${icon} ${service.name}
                 ${service.description ? `<div style="font-size:0.8em;color:#8b949e;margin-top:0.25rem;">${service.description}</div>` : ''}
             </td>
-            <td style="padding: 0.65rem; color: ${statusColor}; font-weight: 600;">${statusLabel}</td>
-            <td style="padding: 0.65rem; color:#8b949e;">${service.detail ?? ''}</td>
-            <td style="padding: 0.65rem; display:flex; gap:0.35rem; flex-wrap:wrap;">
-                ${renderServiceActions(service)}
+            <td class="svc-status" style="padding: 0.65rem; color: ${statusColor}; font-weight: 600;">${statusLabel}</td>
+            <td class="svc-detail" style="padding: 0.65rem; color:#8b949e;">${service.detail ?? ''}</td>
+            <td class="svc-actions" style="padding: 0.65rem; display:flex; gap:0.35rem; flex-wrap:wrap;">
+                ${renderServiceActions(service)}${logsBtn}
             </td>
         </tr>`;
     }).join('');
@@ -217,7 +220,7 @@ export function renderSchedulerSection(
             ` : `
                 <button type="button" class="btn" onclick="startDaemon(this)">▶️ Start Scheduler</button>
             `}
-            <button type="button" class="btn secondary" onclick="location.reload()">🔄 Refresh Status</button>
+            <button type="button" class="btn secondary" onclick="refreshServicesSection()">🔄 Refresh Status</button>
         </div>
         <p id="scheduler-daemon-status" style="margin-top:0.5rem; font-size:0.85em;"></p>
 

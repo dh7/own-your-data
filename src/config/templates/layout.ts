@@ -471,6 +471,58 @@ export function renderLayout(sections: string[], options: LayoutOptions = {}): s
             border-radius: 4px;
             font-size: 0.8rem;
         }
+
+        /* Log viewer modal */
+        .log-viewer-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 9999;
+            background: rgba(0,0,0,0.7);
+            justify-content: center;
+            align-items: center;
+        }
+        .log-viewer-overlay.active {
+            display: flex;
+        }
+        .log-viewer {
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            width: 90vw;
+            max-width: 900px;
+            max-height: 80vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .log-viewer-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid #30363d;
+            color: #c9d1d9;
+            font-weight: 600;
+        }
+        .log-viewer-header .log-actions {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+        .log-viewer-body {
+            overflow: auto;
+            padding: 1rem;
+            flex: 1;
+        }
+        .log-viewer-body pre {
+            margin: 0;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.78rem;
+            line-height: 1.5;
+            color: #8b949e;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
     </style>
 </head>
 <body>
@@ -479,9 +531,107 @@ export function renderLayout(sections: string[], options: LayoutOptions = {}): s
         ${sections.join('\n')}
     </div>
     ${modalsHtml}
-    
+
+    <div class="log-viewer-overlay" id="log-viewer-overlay" onclick="if(event.target===this)closeLogViewer()">
+        <div class="log-viewer">
+            <div class="log-viewer-header">
+                <span id="log-viewer-title">Logs</span>
+                <div class="log-actions">
+                    <button class="btn small-btn secondary" onclick="refreshLogViewer()">Refresh</button>
+                    <button class="btn small-btn secondary" onclick="closeLogViewer()">Close</button>
+                </div>
+            </div>
+            <div class="log-viewer-body">
+                <pre id="log-viewer-content">Loading...</pre>
+            </div>
+        </div>
+    </div>
+
     <script>
     const INITIAL_PLUGIN_PANEL = '${initialPluginPanel}';
+
+    // ---- Log Viewer ----
+    let _logViewerServiceId = null;
+
+    async function viewServiceLogs(serviceId) {
+        _logViewerServiceId = serviceId;
+        const overlay = document.getElementById('log-viewer-overlay');
+        const title = document.getElementById('log-viewer-title');
+        const content = document.getElementById('log-viewer-content');
+        title.textContent = 'Loading...';
+        content.textContent = 'Loading...';
+        overlay.classList.add('active');
+        await refreshLogViewer();
+    }
+
+    async function refreshLogViewer() {
+        if (!_logViewerServiceId) return;
+        const content = document.getElementById('log-viewer-content');
+        const title = document.getElementById('log-viewer-title');
+        try {
+            const res = await fetch('/system/logs/' + encodeURIComponent(_logViewerServiceId));
+            const data = await res.json();
+            title.textContent = (data.file ? data.file + ' - ' : '') + _logViewerServiceId;
+            content.textContent = data.logs || '(empty)';
+            // Scroll to bottom
+            content.parentElement.scrollTop = content.parentElement.scrollHeight;
+        } catch (e) {
+            content.textContent = 'Error loading logs: ' + (e.message || e);
+        }
+    }
+
+    function closeLogViewer() {
+        _logViewerServiceId = null;
+        document.getElementById('log-viewer-overlay').classList.remove('active');
+    }
+
+    // ---- Services Status Refresh (no full page reload) ----
+
+    function buildActionButtons(service) {
+        let html = (service.actions || []).map(function(entry) {
+            const sc = entry.style === 'danger' ? ' danger' : entry.style === 'secondary' ? ' secondary' : '';
+            return '<button type="button" class="btn small-btn' + sc + '" onclick="runServiceAction(\\''+service.id+'\\',\\''+entry.action+'\\',this)">' + entry.label + '</button>';
+        }).join(' ');
+        if (service.id !== 'config-server') {
+            html += ' <button type="button" class="btn small-btn secondary" onclick="viewServiceLogs(\\''+service.id+'\\')">Logs</button>';
+        }
+        return html;
+    }
+
+    async function refreshServicesSection() {
+        try {
+            const res = await fetch('/system/services-status');
+            const data = await res.json();
+            if (!data.services) return;
+
+            for (const svc of data.services) {
+                const row = document.querySelector('tr[data-service-id="' + svc.id + '"]');
+                if (!row) continue;
+
+                // Update status
+                const statusTd = row.querySelector('.svc-status');
+                if (statusTd) {
+                    statusTd.style.color = svc.running ? '#7ee787' : '#f85149';
+                    statusTd.textContent = svc.running ? 'Running' : 'Stopped';
+                }
+
+                // Update detail
+                const detailTd = row.querySelector('.svc-detail');
+                if (detailTd) {
+                    detailTd.textContent = svc.detail || '';
+                }
+
+                // Update actions
+                const actionsTd = row.querySelector('.svc-actions');
+                if (actionsTd) {
+                    actionsTd.innerHTML = buildActionButtons(svc);
+                }
+            }
+        } catch (e) {
+            // Silently fail — server might be restarting
+        }
+    }
+
     async function closeConfig() {
         try {
             await fetch('/shutdown', { method: 'POST' });
@@ -521,7 +671,7 @@ export function renderLayout(sections: string[], options: LayoutOptions = {}): s
                 const remoteShort = data.remoteCommit.substring(0, 7);
                 statusEl.innerHTML = '⬆️ Update available! (' + data.commitsBehind + ' commits behind)<br/>' +
                     'Local: <code>' + localShort + '</code> → Remote: <code>' + remoteShort + '</code><br/>' +
-                    '<a href="javascript:location.reload()">Refresh to see Pull button</a>';
+                    '<button class="btn small-btn" onclick="pullUpdates(this)" style="margin-top:0.5rem;">⬆️ Pull Updates</button>';
                 statusEl.style.color = '#f0a030';
             } else {
                 const remoteShort = data.remoteCommit.substring(0, 7);
@@ -572,12 +722,24 @@ export function renderLayout(sections: string[], options: LayoutOptions = {}): s
         
         try {
             await fetch('/system/restart-config', { method: 'POST' });
-            // Server will exit, wait and reload
-            setTimeout(() => {
-                if (statusEl) statusEl.textContent = 'Waiting for server to restart...';
-                // Try to reload after a delay
-                setTimeout(() => location.reload(), 3000);
-            }, 500);
+            // Server will exit — poll until it's back
+            if (statusEl) statusEl.textContent = 'Waiting for server to restart...';
+            let attempts = 0;
+            const poll = setInterval(async () => {
+                attempts++;
+                try {
+                    const r = await fetch('/system/services-status');
+                    if (r.ok) {
+                        clearInterval(poll);
+                        if (statusEl) { statusEl.textContent = '✅ Server restarted.'; statusEl.style.color = '#7ee787'; }
+                        await refreshServicesSection();
+                    }
+                } catch { /* still restarting */ }
+                if (attempts > 20) {
+                    clearInterval(poll);
+                    if (statusEl) { statusEl.textContent = '⚠️ Server may still be restarting. Try refreshing manually.'; statusEl.style.color = '#f0a030'; }
+                }
+            }, 1000);
         } catch (e) {
             if (statusEl) {
                 statusEl.textContent = '❌ ' + e.message;
@@ -601,9 +763,10 @@ export function renderLayout(sections: string[], options: LayoutOptions = {}): s
             
             if (data.success) {
                 if (statusEl) {
-                    statusEl.innerHTML = '✅ ' + data.message + ' <a href="javascript:location.reload()">Refresh</a>';
+                    statusEl.textContent = '✅ ' + data.message;
                     statusEl.style.color = '#7ee787';
                 }
+                setTimeout(() => refreshServicesSection(), 1500);
             } else {
                 if (statusEl) {
                     statusEl.textContent = '❌ ' + (data.error || 'Start failed');
@@ -634,9 +797,10 @@ export function renderLayout(sections: string[], options: LayoutOptions = {}): s
             
             if (data.success) {
                 if (statusEl) {
-                    statusEl.innerHTML = '✅ ' + data.message + ' <a href="javascript:location.reload()">Refresh</a>';
+                    statusEl.textContent = '✅ ' + data.message;
                     statusEl.style.color = '#7ee787';
                 }
+                setTimeout(() => refreshServicesSection(), 1500);
             } else {
                 if (statusEl) {
                     statusEl.textContent = '❌ ' + (data.error || 'Stop failed');
@@ -667,9 +831,10 @@ export function renderLayout(sections: string[], options: LayoutOptions = {}): s
             
             if (data.success) {
                 if (statusEl) {
-                    statusEl.innerHTML = '✅ ' + data.message + ' <a href="javascript:location.reload()">Refresh</a>';
+                    statusEl.textContent = '✅ ' + data.message;
                     statusEl.style.color = '#7ee787';
                 }
+                setTimeout(() => refreshServicesSection(), 2000);
             } else {
                 if (statusEl) {
                     statusEl.textContent = '❌ ' + (data.error || 'Restart failed');
@@ -699,7 +864,7 @@ export function renderLayout(sections: string[], options: LayoutOptions = {}): s
             const data = await res.json();
             
             if (data.installed && data.browsers) {
-                statusEl.textContent = '✅ All good! Refresh page to update UI.';
+                statusEl.textContent = '✅ Playwright installed with browsers.';
                 statusEl.style.color = '#7ee787';
             } else {
                 statusEl.textContent = '❌ Still missing';
@@ -789,7 +954,7 @@ export function renderLayout(sections: string[], options: LayoutOptions = {}): s
             const data = await res.json();
             
             if (data.success) {
-                statusEl.innerHTML = '✅ ' + data.message + ' <a href="javascript:location.reload()">Refresh page</a>';
+                statusEl.textContent = '✅ ' + data.message;
                 statusEl.style.color = '#7ee787';
                 btn.style.display = 'none';
             } else {
@@ -818,8 +983,9 @@ export function renderLayout(sections: string[], options: LayoutOptions = {}): s
             const data = await res.json();
             
             if (data.success) {
-                statusEl.innerHTML = '✅ Tunnel started! <a href="javascript:location.reload()">Refresh to see URL</a>';
+                statusEl.textContent = '✅ Tunnel started!';
                 statusEl.style.color = '#7ee787';
+                setTimeout(() => refreshServicesSection(), 1500);
             } else {
                 statusEl.textContent = '❌ ' + (data.message || 'Failed to start tunnel');
                 statusEl.style.color = '#f85149';
@@ -844,8 +1010,9 @@ export function renderLayout(sections: string[], options: LayoutOptions = {}): s
             const data = await res.json();
             
             if (data.success) {
-                statusEl.innerHTML = '✅ Tunnel stopped. <a href="javascript:location.reload()">Refresh page</a>';
+                statusEl.textContent = '✅ Tunnel stopped.';
                 statusEl.style.color = '#7ee787';
+                setTimeout(() => refreshServicesSection(), 1500);
             } else {
                 statusEl.textContent = '❌ ' + (data.message || 'Failed to stop tunnel');
                 statusEl.style.color = '#f85149';
@@ -929,6 +1096,7 @@ export function renderLayout(sections: string[], options: LayoutOptions = {}): s
 
     document.addEventListener('keyup', (event) => {
         if (event.key === 'Escape') {
+            closeLogViewer();
             closeAllPluginPanels();
         }
     });
@@ -952,7 +1120,7 @@ export function renderLayout(sections: string[], options: LayoutOptions = {}): s
                 throw new Error(data.error || data.message || 'Action failed');
             }
             btn.textContent = '✅';
-            setTimeout(() => location.reload(), 700);
+            setTimeout(() => refreshServicesSection(), 1500);
         } catch (e) {
             btn.disabled = false;
             btn.textContent = originalText;
@@ -1044,7 +1212,7 @@ export function renderLayout(sections: string[], options: LayoutOptions = {}): s
             const data = await res.json();
             
             if (data.success) {
-                statusEl.innerHTML = '✅ ' + data.message + '<br/><a href="javascript:location.reload()" class="btn small-btn" style="margin-top: 0.5rem; display: inline-block;">🔄 Reload to continue</a>';
+                statusEl.textContent = '✅ ' + data.message;
                 statusEl.style.color = '#7ee787';
             } else {
                 statusEl.textContent = '❌ ' + (data.message || 'Failed to save credentials');
@@ -1093,8 +1261,9 @@ export function renderLayout(sections: string[], options: LayoutOptions = {}): s
             const data = await res.json();
             
             if (data.success) {
-                statusEl.innerHTML = '✅ ' + data.message + '<br/><a href="javascript:location.reload()" class="btn small-btn" style="margin-top: 0.5rem; display: inline-block;">🔄 Reload to continue</a>';
+                statusEl.textContent = '✅ ' + data.message;
                 statusEl.style.color = '#7ee787';
+                setTimeout(() => refreshServicesSection(), 1500);
             } else {
                 statusEl.textContent = '❌ ' + (data.message || 'Failed to create tunnel');
                 statusEl.style.color = '#f85149';
@@ -1121,8 +1290,9 @@ export function renderLayout(sections: string[], options: LayoutOptions = {}): s
             const data = await res.json();
             
             if (data.success) {
-                statusEl.innerHTML = '✅ Tunnel started!<br/><a href="javascript:location.reload()" class="btn small-btn" style="margin-top: 0.5rem; display: inline-block;">🔄 Reload to see status</a>';
+                statusEl.textContent = '✅ Tunnel started!';
                 statusEl.style.color = '#7ee787';
+                setTimeout(() => refreshServicesSection(), 1500);
             } else {
                 statusEl.textContent = '❌ ' + (data.message || 'Failed to start tunnel');
                 statusEl.style.color = '#f85149';
@@ -1153,8 +1323,9 @@ export function renderLayout(sections: string[], options: LayoutOptions = {}): s
             const data = await res.json();
             
             if (data.success) {
-                statusEl.innerHTML = '✅ Tunnel deleted.<br/><a href="javascript:location.reload()" class="btn small-btn" style="margin-top: 0.5rem; display: inline-block;">🔄 Reload page</a>';
+                statusEl.textContent = '✅ Tunnel deleted.';
                 statusEl.style.color = '#7ee787';
+                setTimeout(() => refreshServicesSection(), 1500);
             } else {
                 statusEl.textContent = '❌ ' + (data.message || 'Failed to delete tunnel');
                 statusEl.style.color = '#f85149';
@@ -1184,7 +1355,7 @@ export function renderLayout(sections: string[], options: LayoutOptions = {}): s
                 if (data.nvidiaDockerInstalled) {
                     msg += ' (GPU support detected)';
                 }
-                msg += ' Refresh page to update UI.';
+                msg += ' Docker is ready.';
                 statusEl.textContent = msg;
                 statusEl.style.color = '#7ee787';
             } else {

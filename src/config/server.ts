@@ -1740,6 +1740,175 @@ app.post('/system/service/:id/:action', async (req, res) => {
   }
 });
 
+// ============ LOGS VIEWER ============
+
+app.get('/system/logs/:serviceId', async (req, res) => {
+  const serviceId = req.params.serviceId;
+  const maxLines = Math.min(Math.max(parseInt(req.query.lines as string, 10) || 200, 10), 2000);
+
+  try {
+    const config = await loadConfig();
+    const paths = getResolvedPaths(config);
+    let logFile: string | null = null;
+
+    if (serviceId === 'scheduler' || serviceId === 'daemon') {
+      // Scheduler daily log: logs/scheduler/YYYY-MM-DD.log
+      const schedulerDir = paths.schedulerLogs;
+      try {
+        const files = await fs.readdir(schedulerDir);
+        const logFiles = files.filter(f => f.endsWith('.log')).sort().reverse();
+        if (logFiles.length > 0) {
+          logFile = path.join(schedulerDir, logFiles[0]);
+        }
+      } catch { /* dir doesn't exist */ }
+    } else {
+      // Plugin server logs: try logs/{pluginId}/ (strip -server suffix)
+      const pluginId = serviceId.replace(/-server$/, '');
+      const pluginLogDir = path.join(paths.logs, pluginId);
+      try {
+        const files = await fs.readdir(pluginLogDir);
+        const logFiles = files.filter(f => f.endsWith('.log')).sort().reverse();
+        if (logFiles.length > 0) {
+          logFile = path.join(pluginLogDir, logFiles[0]);
+        }
+      } catch { /* dir doesn't exist */ }
+
+      // Fallback: check scheduler logs for this plugin's entries
+      if (!logFile) {
+        const schedulerDir = paths.schedulerLogs;
+        try {
+          const files = await fs.readdir(schedulerDir);
+          const logFiles = files.filter(f => f.endsWith('.log')).sort().reverse();
+          if (logFiles.length > 0) {
+            logFile = path.join(schedulerDir, logFiles[0]);
+          }
+        } catch { /* dir doesn't exist */ }
+      }
+    }
+
+    if (!logFile) {
+      res.json({ logs: 'No log files found.', file: '' });
+      return;
+    }
+
+    const content = await fs.readFile(logFile, 'utf-8');
+    const lines = content.split('\n');
+    const tail = lines.slice(-maxLines).join('\n');
+
+    res.json({ logs: tail, file: path.basename(logFile) });
+  } catch (e: any) {
+    res.json({ logs: `Error reading logs: ${e.message}`, file: '' });
+  }
+});
+
+// ============ SERVICES STATUS API ============
+
+app.get('/system/services-status', async (req, res) => {
+  try {
+    const plugins = await discoverPlugins();
+    const daemonRunning = await checkDaemonRunning();
+    const tunnelStatus = await getTunnelStatusAsync();
+
+    const services: Array<{
+      id: string;
+      name: string;
+      icon: string;
+      running: boolean;
+      description: string;
+      detail: string;
+      actions: Array<{ action: string; label: string; style?: string }>;
+    }> = [];
+
+    // Config server (always running if this endpoint responds)
+    services.push({
+      id: 'config-server',
+      name: 'Config Server',
+      icon: '🧩',
+      running: true,
+      description: 'This configuration UI',
+      detail: `Port ${PORT}`,
+      actions: [{ action: 'restart', label: 'Restart', style: 'secondary' }],
+    });
+
+    // Daemon
+    services.push({
+      id: 'daemon',
+      name: 'Scheduler Daemon',
+      icon: '🤖',
+      running: daemonRunning,
+      description: 'Runs npm run scheduler',
+      detail: daemonRunning ? 'PID file present' : 'Not running',
+      actions: daemonRunning
+        ? [
+          { action: 'restart', label: 'Restart', style: 'secondary' },
+          { action: 'stop', label: 'Stop', style: 'danger' },
+        ]
+        : [{ action: 'start', label: 'Start' }],
+    });
+
+    // Tunnel
+    services.push({
+      id: 'tunnel',
+      name: 'Cloudflare Tunnel',
+      icon: '☁️',
+      running: tunnelStatus.tunnelRunning,
+      description: tunnelStatus.tunnelConfigured ? 'Standalone service (npm run tunnel)' : 'Not configured',
+      detail: tunnelStatus.tunnelRunning
+        ? (tunnelStatus.tunnelUrl || `Proxy on port ${PROXY_PORT}`)
+        : (tunnelStatus.tunnelConfigured ? 'Ready to start' : 'Configure in Domain section'),
+      actions: tunnelStatus.tunnelConfigured
+        ? (tunnelStatus.tunnelRunning
+          ? [
+            { action: 'restart', label: 'Restart', style: 'secondary' },
+            { action: 'stop', label: 'Stop', style: 'danger' },
+          ]
+          : [{ action: 'start', label: 'Start' }])
+        : [],
+    });
+
+    // Plugin servers
+    for (const plugin of plugins) {
+      const serverCommand = plugin.manifest.commands.server;
+      if (!serverCommand || serverCommand.trim().length === 0) continue;
+
+      const serviceId = getPluginServiceId(plugin.manifest.id);
+      let running = await isServicePidAlive(serviceId);
+
+      if (!running && plugin.manifest.tunnel?.enabled) {
+        const healthRoute = plugin.manifest.tunnel.routes.find(
+          (route: any) => route.path === '/health' && route.auth === false
+        );
+        if (healthRoute) {
+          running = await checkServiceHealth(`http://127.0.0.1:${plugin.manifest.tunnel.port}${healthRoute.path}`);
+        }
+      }
+
+      const detail = plugin.manifest.tunnel?.enabled
+        ? `Port ${plugin.manifest.tunnel.port}`
+        : 'No health endpoint configured';
+
+      services.push({
+        id: serviceId,
+        name: `${plugin.manifest.name} Server`,
+        icon: plugin.manifest.icon,
+        running,
+        description: 'Plugin-managed background service',
+        detail,
+        actions: running
+          ? [
+            { action: 'restart', label: 'Restart', style: 'secondary' },
+            { action: 'stop', label: 'Stop', style: 'danger' },
+          ]
+          : [{ action: 'start', label: 'Start' }],
+      });
+    }
+
+    res.json({ services });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ============ CLOUDFLARE TUNNEL ROUTES ============
 
 app.get('/dependencies/check-cloudflared', async (req, res) => {
