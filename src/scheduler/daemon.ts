@@ -11,9 +11,8 @@ import { ChildProcess, spawn, exec } from 'child_process';
 import { promisify } from 'util';
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { loadConfig } from '../config/config';
 import { discoverPlugins, DiscoveredPlugin } from '../plugins';
-import { resolveSchedulerPluginConfig } from './config';
+import { resolvePluginSchedule } from './config';
 import {
     logSchedulerStart,
     logServerStart,
@@ -36,6 +35,13 @@ const PID_FILE = path.join(process.cwd(), 'logs', 'scheduler.pid');
 const serviceProcesses = new Map<string, ChildProcess>();
 const serviceCommandByPlugin = new Map<string, string>();
 const schedulerState = new Map<string, PluginRuntimeState>();
+const knownExternalPids = new Map<string, number>();
+const serverStartTimes = new Map<string, number>();
+const restartState = new Map<string, { failures: number; nextRetry: number; gaveUp: boolean }>();
+
+const MAX_FAST_FAILURES = 5;
+const FAST_CRASH_THRESHOLD_MS = 10_000;
+const MAX_BACKOFF_MS = 300_000; // 5 minutes
 
 function clamp(value: number, min: number, max: number): number {
     return Math.min(max, Math.max(min, value));
@@ -144,8 +150,7 @@ async function runCommand(name: string, command: string, pluginId: string, comma
 }
 
 async function runPluginJob(plugin: DiscoveredPlugin): Promise<void> {
-    const appConfig = await loadConfig();
-    const schedule = resolveSchedulerPluginConfig(appConfig, plugin);
+    const schedule = await resolvePluginSchedule(plugin);
     const state = schedulerState.get(plugin.manifest.id) || { running: false, nextRun: null };
     if (state.running || !schedule.enabled || schedule.commands.length === 0) {
         return;
@@ -201,21 +206,39 @@ async function checkExistingProcess(commandPattern: string): Promise<number | nu
 }
 
 async function ensurePluginServer(plugin: DiscoveredPlugin): Promise<void> {
-    const existing = serviceProcesses.get(plugin.manifest.id);
+    const pluginId = plugin.manifest.id;
+    const existing = serviceProcesses.get(pluginId);
     if (existing) return;
 
     const command = plugin.manifest.commands.server;
     if (!command || command.trim().length === 0) return;
 
+    // Check if we already gave up on this server
+    const rs = restartState.get(pluginId);
+    if (rs?.gaveUp) return;
+
+    // Check backoff timer
+    if (rs && Date.now() < rs.nextRetry) return;
+
     // Check if a process is already running for this server command
     const existingPid = await checkExistingProcess(command);
     if (existingPid) {
-        console.log(`⚠️ ${plugin.manifest.name} server already running (PID ${existingPid}), skipping start`);
+        // Only log once per unique external PID
+        if (knownExternalPids.get(pluginId) !== existingPid) {
+            console.log(`ℹ️ ${plugin.manifest.name} server already running externally (PID ${existingPid})`);
+            knownExternalPids.set(pluginId, existingPid);
+        }
         return;
     }
 
+    // External process gone — clear tracking
+    knownExternalPids.delete(pluginId);
+
     console.log(`🧩 Starting server for ${plugin.manifest.name}: ${command}`);
-    void logServerStart(plugin.manifest.id, command);
+    void logServerStart(pluginId, command);
+
+    const startedAt = Date.now();
+    serverStartTimes.set(pluginId, startedAt);
 
     const child = spawn(command, {
         cwd: process.cwd(),
@@ -226,38 +249,62 @@ async function ensurePluginServer(plugin: DiscoveredPlugin): Promise<void> {
     // Capture stdout
     child.stdout?.on('data', (data: Buffer) => {
         const output = data.toString();
-        process.stdout.write(output); // Still show in console
-        void logServerOutput(plugin.manifest.id, output, false);
+        process.stdout.write(output);
+        void logServerOutput(pluginId, output, false);
     });
 
     // Capture stderr
     child.stderr?.on('data', (data: Buffer) => {
         const output = data.toString();
-        process.stderr.write(output); // Still show in console
-        void logServerOutput(plugin.manifest.id, output, true);
+        process.stderr.write(output);
+        void logServerOutput(pluginId, output, true);
     });
 
-    serviceProcesses.set(plugin.manifest.id, child);
-    serviceCommandByPlugin.set(plugin.manifest.id, command);
+    serviceProcesses.set(pluginId, child);
+    serviceCommandByPlugin.set(pluginId, command);
 
     child.on('exit', (code) => {
-        void logServerStop(plugin.manifest.id);
-        serviceProcesses.delete(plugin.manifest.id);
-        const restartCommand = serviceCommandByPlugin.get(plugin.manifest.id);
+        void logServerStop(pluginId);
+        serviceProcesses.delete(pluginId);
+
+        const restartCommand = serviceCommandByPlugin.get(pluginId);
         if (!restartCommand) return;
 
-        setTimeout(async () => {
-            const appConfig = await loadConfig();
-            const schedule = resolveSchedulerPluginConfig(appConfig, plugin);
+        const uptime = Date.now() - (serverStartTimes.get(pluginId) || 0);
+        const state = restartState.get(pluginId) || { failures: 0, nextRetry: 0, gaveUp: false };
 
-            // Only auto-restart if BOTH autoStartServer and autoRestartServer are enabled
+        // Fast crash detection
+        if (uptime < FAST_CRASH_THRESHOLD_MS) {
+            state.failures++;
+            if (state.failures >= MAX_FAST_FAILURES) {
+                state.gaveUp = true;
+                restartState.set(pluginId, state);
+                console.error(`❌ ${plugin.manifest.name} server crashed ${state.failures} times quickly — giving up. Start it manually.`);
+                return;
+            }
+            const delay = Math.min(5_000 * Math.pow(2, state.failures - 1), MAX_BACKOFF_MS);
+            state.nextRetry = Date.now() + delay;
+            restartState.set(pluginId, state);
+        } else {
+            // Server ran long enough, reset failure count
+            state.failures = 0;
+            state.nextRetry = 0;
+            restartState.set(pluginId, state);
+        }
+
+        void (async () => {
+            const schedule = await resolvePluginSchedule(plugin);
+
             if (schedule.autoStartServer && schedule.autoRestartServer) {
-                console.log(`🔄 Auto-restarting ${plugin.manifest.name} server (exit code: ${code})`);
-                await ensurePluginServer(plugin);
+                const delay = Math.max(0, (state.nextRetry || 0) - Date.now());
+                if (delay > 0) {
+                    console.log(`🔄 Restarting ${plugin.manifest.name} server in ${Math.round(delay / 1000)}s (attempt ${state.failures}/${MAX_FAST_FAILURES})`);
+                }
+                setTimeout(() => ensurePluginServer(plugin), delay || 5000);
             } else if (schedule.autoStartServer && !schedule.autoRestartServer) {
                 console.log(`⏸️ ${plugin.manifest.name} server stopped (auto-restart disabled)`);
             }
-        }, 5000);
+        })();
     });
 }
 
@@ -281,10 +328,9 @@ function parseFixedTimes(times: string[]): Set<string> {
 
 async function tick(plugins: DiscoveredPlugin[]): Promise<void> {
     const now = new Date();
-    const appConfig = await loadConfig();
 
     for (const plugin of plugins) {
-        const schedule = resolveSchedulerPluginConfig(appConfig, plugin);
+        const schedule = await resolvePluginSchedule(plugin);
         const state = schedulerState.get(plugin.manifest.id) || { running: false, nextRun: null };
 
         if (schedule.enabled && schedule.autoStartServer && plugin.manifest.commands.server) {

@@ -25,6 +25,8 @@ import {
   PluginConfig,
   SchedulerCommand,
   migrateConfigIfNeeded,
+  loadSchedulerConfig,
+  saveSchedulerConfig,
 } from './config';
 import { PluginSchedule } from '../scheduler/config';
 import { useSingleFileAuthState } from '../shared/auth-utils';
@@ -449,13 +451,22 @@ app.get('/', async (req, res) => {
       || plugin.getDefaultConfig();
     const schedulerConfig = resolveSchedulerPluginConfig(config, discovered);
     const availableCommands = getAvailableCommands(discovered);
+    const hasServer = typeof discovered.manifest.commands.server === 'string' && discovered.manifest.commands.server.trim().length > 0;
+
+    // Read server settings from scheduler.json (source of truth for the daemon)
+    const schedulerJson = await loadSchedulerConfig();
+    const serverCfg = schedulerJson.servers[discovered.manifest.id];
+    const autoStartServer = serverCfg?.autoStart ?? false;
+    const autoRestartServer = serverCfg?.restartOnCrash ?? true;
+
     const scheduleText = availableCommands.length === 0
-      ? (schedulerConfig.enabled
+      ? (autoStartServer
         ? '<span style="color:#8b949e">Server managed</span>'
         : '<span style="color:#8b949e">Disabled</span>')
       : describeSchedule(schedulerConfig);
 
-    if (discovered.manifest.scheduler.mode === 'interval') {
+    // Show in scheduler UI if plugin has scheduled commands OR a server
+    if (availableCommands.length > 0 || hasServer) {
       pluginScheduleRows.push({
         id: discovered.manifest.id,
         name: discovered.manifest.name,
@@ -469,9 +480,9 @@ app.get('/', async (req, res) => {
         fixedTimes: schedulerConfig.fixedTimes,
         commands: schedulerConfig.commands,
         availableCommands,
-        autoStartServer: schedulerConfig.autoStartServer,
-        autoRestartServer: schedulerConfig.autoRestartServer,
-        hasServer: typeof discovered.manifest.commands.server === 'string' && discovered.manifest.commands.server.trim().length > 0,
+        autoStartServer,
+        autoRestartServer,
+        hasServer,
         scheduleText,
       });
     }
@@ -717,6 +728,17 @@ app.post('/scheduler/plugin/:id', async (req, res) => {
     autoRestartServer: req.body.autoRestartServer === 'on',
   };
 
+  // Save server settings to config/scheduler.json
+  const schedulerJson = await loadSchedulerConfig();
+  if (plugin.manifest.commands.server?.trim()) {
+    schedulerJson.servers[pluginId] = {
+      autoStart: nextConfig.autoStartServer,
+      restartOnCrash: nextConfig.autoRestartServer,
+    };
+  }
+  await saveSchedulerConfig(schedulerJson);
+
+  // Also save scheduling (tasks) to legacy config for backward compat
   if (!config.schedulerConfig) {
     config.schedulerConfig = { plugins: {} };
   }

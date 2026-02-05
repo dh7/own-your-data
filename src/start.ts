@@ -23,6 +23,11 @@ let tunnelProcess: ChildProcess | null = null;
 let schedulerStartedHere = false;
 let tunnelStartedHere = false;
 
+const MAX_CONFIG_RETRIES = 5;
+const FAST_EXIT_MS = 5_000;
+let configRestartCount = 0;
+let configLastStart = 0;
+
 function spawnScript(script: string): ChildProcess {
     return spawn(NPM_CMD, ['run', script], {
         cwd: CWD,
@@ -90,14 +95,31 @@ async function isTunnelConfigured(): Promise<boolean> {
 
 function startConfig(): void {
     console.log('🧩 Starting config server...');
+    configLastStart = Date.now();
     configProcess = spawnScript('config');
 
     configProcess.on('exit', (code, signal) => {
         if (shuttingDown) return;
-        console.log(`⚠️ Config server exited (${signal || code}). Restarting in 1s...`);
+
+        const uptime = Date.now() - configLastStart;
+
+        // If server ran for a while, reset failure count
+        if (uptime > FAST_EXIT_MS) {
+            configRestartCount = 0;
+        } else {
+            configRestartCount++;
+        }
+
+        if (configRestartCount >= MAX_CONFIG_RETRIES) {
+            console.error(`❌ Config server crashed ${configRestartCount} times quickly — giving up. Check if port 3456 is in use.`);
+            return;
+        }
+
+        const delay = uptime > FAST_EXIT_MS ? 1_000 : Math.min(1_000 * Math.pow(2, configRestartCount), 60_000);
+        console.log(`⚠️ Config server exited (${signal || code}). Restarting in ${Math.round(delay / 1000)}s...`);
         setTimeout(() => {
             if (!shuttingDown) startConfig();
-        }, 1000);
+        }, delay);
     });
 }
 
