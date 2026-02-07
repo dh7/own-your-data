@@ -108,8 +108,6 @@ async function main() {
         mindcache.setType(key, 'Contact');
     }
 
-    mindcache.set('last_sync_google', new Date().toISOString());
-
     const syncFile = `${githubPath}/contacts.md`;
     const sync = new MindCacheSync(gitStore, mindcache, {
         filePath: syncFile,

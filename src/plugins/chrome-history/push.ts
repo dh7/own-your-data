@@ -162,8 +162,6 @@ async function main() {
         console.log(`   📅 ${date}: ${urls.length} URLs`);
     }
 
-    mindcache.set('last_sync_chrome_history', new Date().toISOString());
-
     // Sync to GitHub
     const syncFile = `${githubPath}/history.md`;
     const sync = new MindCacheSync(gitStore, mindcache, {

@@ -187,8 +187,6 @@ async function main() {
                 }
             }
 
-            mindcache.set('last_scrape', new Date().toISOString());
-
             const filePath = `${twitterPath}/twitter-${username}.md`;
             const sync = new MindCacheSync(gitStore, mindcache, {
                 filePath,

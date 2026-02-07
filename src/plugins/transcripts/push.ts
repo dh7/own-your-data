@@ -112,8 +112,6 @@ async function main() {
                 });
             }
 
-            mindcache.set('last_sync', new Date().toISOString());
-
             const filePath = `${transcriptsPath}/transcripts-${date}.md`;
             const sync = new MindCacheSync(gitStore, mindcache, {
                 filePath,

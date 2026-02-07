@@ -71,8 +71,6 @@ async function main() {
             contactCache.set(key, JSON.stringify(contact));
             contactCache.setType(key, 'Contact');
         }
-        contactCache.set('last_sync_linkedin_contacts', new Date().toISOString());
-
         const targetFile = `${githubPath}/linkedin.md`;
 
         const syncContacts = new MindCacheSync(gitStore, contactCache, {
@@ -125,8 +123,6 @@ async function main() {
                 messageCache.setType(key, 'text');
             }
         }
-
-        messageCache.set('last_sync_linkedin_messages', new Date().toISOString());
 
         const messagesFile = `${githubPath}/messages.md`;
         const syncMessages = new MindCacheSync(gitStore, messageCache, {

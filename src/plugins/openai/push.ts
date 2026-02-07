@@ -153,8 +153,6 @@ async function main() {
         });
     }
 
-    syncCache.set('last_sync_openai', new Date().toISOString());
-
     const syncFile = `${githubPath}/conversations.md`;
     const sync = new MindCacheSync(gitStore, syncCache, {
         filePath: syncFile,
