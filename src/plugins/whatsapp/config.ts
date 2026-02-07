@@ -10,6 +10,9 @@ import { BasePluginConfig } from '../types';
 export interface WhatsAppPluginConfig extends BasePluginConfig {
     /** GitHub path for this plugin's data */
     githubPath: string;
+
+    /** Number of days to push to GitHub (default: 7) */
+    pushDays: number;
 }
 
 /**
@@ -18,6 +21,7 @@ export interface WhatsAppPluginConfig extends BasePluginConfig {
 export const DEFAULT_CONFIG: WhatsAppPluginConfig = {
     enabled: true,
     githubPath: 'whatsapp',
+    pushDays: 7,
 };
 
 /**

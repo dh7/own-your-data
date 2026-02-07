@@ -2,8 +2,10 @@
  * WhatsApp PUSH script - Sync conversations to GitHub
  * Run: npm run whatsapp:push
  * 
- * Reads the local whatsapp-YYYY-MM-DD.md and pushes to GitHub.
- * Also uploads any media files from media/{date}/ folder.
+ * Pushes the last N days of whatsapp-YYYY-MM-DD.md files to GitHub.
+ * Also uploads any media files from media/{date}/ folders.
+ * 
+ * Default: last 7 days. Override with WHATSAPP_PUSH_DAYS env var.
  */
 
 import * as fs from 'fs/promises';
@@ -11,7 +13,22 @@ import * as path from 'path';
 import { Octokit } from '@octokit/rest';
 import { MindCache } from 'mindcache';
 import { GitStore, MindCacheSync } from '@mindcache/gitstore';
-import { loadConfig, getResolvedPaths, loadGitHubConfig, getTodayString } from '../../config/config';
+import { loadConfig, loadPluginConfig, getResolvedPaths, loadGitHubConfig, getTodayString } from '../../config/config';
+import { WhatsAppPluginConfig, DEFAULT_CONFIG } from './config';
+
+/**
+ * Get date strings for the last N days (including today)
+ */
+function getLastNDays(n: number): string[] {
+    const dates: string[] = [];
+    const now = new Date();
+    for (let i = 0; i < n; i++) {
+        const d = new Date(now);
+        d.setDate(d.getDate() - i);
+        dates.push(d.toISOString().split('T')[0]);
+    }
+    return dates;
+}
 
 /**
  * Upload a file to GitHub (creates or updates)
@@ -54,23 +71,15 @@ async function uploadFileToGitHub(
 async function main() {
     const config = await loadConfig();
     const paths = getResolvedPaths(config);
-    const today = getTodayString();
+    const pluginConfig = await loadPluginConfig<WhatsAppPluginConfig>('whatsapp');
+    const whatsappConfig = pluginConfig || DEFAULT_CONFIG;
 
-    const localPath = path.join(paths.whatsappLocal, `whatsapp-${today}.md`);
-    const mediaDirPath = path.join(paths.whatsappLocal, 'media', today);
+    const pushDays = whatsappConfig.pushDays || DEFAULT_CONFIG.pushDays;
+    const dates = getLastNDays(pushDays);
+    const whatsappPath = whatsappConfig.githubPath || DEFAULT_CONFIG.githubPath;
 
-    console.log(`📤 WhatsApp Push - Syncing to GitHub`);
-    console.log(`📅 Date: ${today}`);
-    console.log(`📂 Source: ${localPath}`);
-
-    // Check if local file exists
-    try {
-        await fs.access(localPath);
-    } catch {
-        console.error(`❌ No local file found: ${localPath}`);
-        console.log('Run "npm run whatsapp:process" first to generate output.');
-        process.exit(1);
-    }
+    console.log(`📤 WhatsApp Push - Syncing last ${pushDays} days to GitHub`);
+    console.log(`📅 Dates: ${dates[dates.length - 1]} → ${dates[0]}`);
 
     // Load GitHub config
     const githubConfig = await loadGitHubConfig();
@@ -79,73 +88,79 @@ async function main() {
         process.exit(1);
     }
 
-    const outputPath = config.plugins?.whatsapp?.githubPath || 'whatsapp';
-    console.log(`📦 Target: ${githubConfig.owner}/${githubConfig.repo}/${outputPath}`);
+    console.log(`📦 Target: ${githubConfig.owner}/${githubConfig.repo}/${whatsappPath}\n`);
 
-    try {
-        // Read local file and parse into MindCache
-        const content = await fs.readFile(localPath, 'utf-8');
-        const mindcache = new MindCache();
-        mindcache.fromMarkdown(content);
+    const gitStore = new GitStore({
+        owner: githubConfig.owner,
+        repo: githubConfig.repo,
+        tokenProvider: async () => githubConfig.token,
+    });
 
-        // Sync markdown to GitHub
-        const gitStore = new GitStore({
-            owner: githubConfig.owner,
-            repo: githubConfig.repo,
-            tokenProvider: async () => githubConfig.token,
-        });
+    const octokit = new Octokit({ auth: githubConfig.token });
 
-        // Use per-connector path or fallback
-        const whatsappPath = config.plugins?.whatsapp?.githubPath || 'whatsapp';
-        const sync = new MindCacheSync(gitStore, mindcache, {
-            filePath: `${whatsappPath}/whatsapp-${today}.md`,
-            instanceName: 'WhatsApp Collector',
-        });
+    let filesSynced = 0;
+    let totalMedia = 0;
 
-        const keys = mindcache.keys();
-        await sync.save({ message: `WhatsApp ${today}: ${keys.length} conversations` });
-        console.log('✅ Markdown synced to GitHub');
+    for (const date of dates) {
+        const localPath = path.join(paths.whatsappLocal, `whatsapp-${date}.md`);
 
-        // Upload media files
-        let mediaCount = 0;
+        // Check if local file exists
         try {
-            const mediaFiles = await fs.readdir(mediaDirPath);
-            if (mediaFiles.length > 0) {
-                console.log(`📷 Uploading ${mediaFiles.length} media files...`);
-
-                const octokit = new Octokit({ auth: githubConfig.token });
-
-                for (const filename of mediaFiles) {
-                    const localFilePath = path.join(mediaDirPath, filename);
-                    const remoteFilePath = `${outputPath}/media/${today}/${filename}`;
-                    const fileContent = await fs.readFile(localFilePath);
-
-                    const success = await uploadFileToGitHub(
-                        octokit,
-                        githubConfig.owner,
-                        githubConfig.repo,
-                        remoteFilePath,
-                        fileContent,
-                        `Add media: ${filename}`
-                    );
-
-                    if (success) {
-                        mediaCount++;
-                        console.log(`   ✅ ${filename}`);
-                    }
-                }
-                console.log(`📷 Uploaded ${mediaCount}/${mediaFiles.length} media files`);
-            }
+            await fs.access(localPath);
         } catch {
-            // Media directory doesn't exist or is empty - that's fine
+            continue; // No file for this day, skip
         }
 
-        console.log('✨ Done!');
-    } catch (e: any) {
-        console.error(`❌ GitHub sync failed: ${e.message}`);
-        process.exit(1);
+        try {
+            // Read local file and parse into MindCache
+            const content = await fs.readFile(localPath, 'utf-8');
+            const mindcache = new MindCache();
+            mindcache.fromMarkdown(content);
+
+            const sync = new MindCacheSync(gitStore, mindcache, {
+                filePath: `${whatsappPath}/whatsapp-${date}.md`,
+                instanceName: 'WhatsApp Collector',
+            });
+
+            const keys = mindcache.keys();
+            await sync.save({ message: `WhatsApp ${date}: ${keys.length} conversations` });
+            console.log(`   ✅ ${date}: ${keys.length} conversations`);
+            filesSynced++;
+
+            // Upload media files for this day
+            const mediaDirPath = path.join(paths.whatsappLocal, 'media', date);
+            try {
+                const mediaFiles = await fs.readdir(mediaDirPath);
+                if (mediaFiles.length > 0) {
+                    for (const filename of mediaFiles) {
+                        const localFilePath = path.join(mediaDirPath, filename);
+                        const remoteFilePath = `${whatsappPath}/media/${date}/${filename}`;
+                        const fileContent = await fs.readFile(localFilePath);
+
+                        const success = await uploadFileToGitHub(
+                            octokit,
+                            githubConfig.owner,
+                            githubConfig.repo,
+                            remoteFilePath,
+                            fileContent,
+                            `Add media: ${filename}`
+                        );
+
+                        if (success) totalMedia++;
+                    }
+                }
+            } catch {
+                // Media directory doesn't exist or is empty - that's fine
+            }
+        } catch (e: any) {
+            console.error(`   ❌ ${date}: ${e.message}`);
+        }
     }
+
+    console.log(`\n📊 Summary:`);
+    console.log(`   Days synced: ${filesSynced}`);
+    if (totalMedia > 0) console.log(`   Media uploaded: ${totalMedia}`);
+    console.log('✨ Done!');
 }
 
 main().catch(console.error);
-
