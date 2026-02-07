@@ -21,6 +21,11 @@ Contains session credentials and tokens for all connectors. **Never delete, modi
 - ❌ Remove `auth/` from `.gitignore`
 - ❌ Commit auth files or raw-dumps to git
 
+## Remote Server (192.168.1.127)
+- ❌ **Never** kill processes, start services, or run `npm run start` on the server without explicit user permission
+- ❌ **Never** run destructive commands (`rm`, `pkill`, `kill`) on the server without explicit user permission
+- ✅ SSH read-only commands (checking logs, status, config) are fine
+
 
 ## Mindcache
 Always use `mindcache.toMarkdown()` to generate md files. Do not write files directly.
