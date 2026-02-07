@@ -220,54 +220,68 @@ async function main(): Promise<void> {
     console.log('🚀 Own Your Data start\n');
 
     const existing = await detectExisting();
+    const tunnelConfigured = await isTunnelConfigured();
+
+    // ---- Phase 1: Ask all questions BEFORE spawning anything ----
+    // (child processes with stdio: 'inherit' steal stdin)
+
+    let restartConfig = !existing.configRunning; // true = start fresh
+    let restartScheduler = !existing.schedulerRunning;
+    let restartTunnel = !existing.tunnelRunning || !tunnelConfigured;
+
+    if (existing.configRunning) {
+        const a = await ask('🧩 Config server is already running on port 3456. Restart it? [y/N] ');
+        restartConfig = a === 'y' || a === 'yes';
+    }
+
+    if (existing.schedulerRunning && existing.schedulerPid) {
+        const a = await ask(`🤖 Scheduler is already running (PID ${existing.schedulerPid}). Restart it? [y/N] `);
+        restartScheduler = a === 'y' || a === 'yes';
+    }
+
+    if (tunnelConfigured && existing.tunnelRunning && existing.tunnelPid) {
+        const a = await ask(`🌐 Tunnel is already running (PID ${existing.tunnelPid}). Restart it? [y/N] `);
+        restartTunnel = a === 'y' || a === 'yes';
+    }
+
+    // ---- Phase 2: Act on the answers ----
 
     // Config server
-    if (existing.configRunning) {
-        const answer = await ask('🧩 Config server is already running on port 3456. Restart it? [y/N] ');
-        if (answer === 'y' || answer === 'yes') {
-            console.log('   Stopping config server...');
-            await fetch('http://127.0.0.1:3456/shutdown', { method: 'POST' }).catch(() => {});
-            await new Promise(resolve => setTimeout(resolve, 1500));
-            launchConfig();
-        } else {
-            console.log('   Keeping existing config server.');
-        }
-    } else {
+    if (existing.configRunning && restartConfig) {
+        console.log('   Stopping config server...');
+        await fetch('http://127.0.0.1:3456/shutdown', { method: 'POST' }).catch(() => {});
+        await new Promise(resolve => setTimeout(resolve, 1500));
         launchConfig();
+    } else if (!existing.configRunning) {
+        launchConfig();
+    } else {
+        console.log('   Keeping existing config server.');
     }
 
     // Scheduler
-    if (existing.schedulerRunning && existing.schedulerPid) {
-        const answer = await ask(`🤖 Scheduler is already running (PID ${existing.schedulerPid}). Restart it? [y/N] `);
-        if (answer === 'y' || answer === 'yes') {
-            console.log('   Stopping scheduler...');
-            killPid(existing.schedulerPid);
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            launchScheduler();
-        } else {
-            console.log('   Keeping existing scheduler.');
-        }
-    } else {
+    if (existing.schedulerRunning && existing.schedulerPid && restartScheduler) {
+        console.log('   Stopping scheduler...');
+        killPid(existing.schedulerPid);
+        await new Promise(resolve => setTimeout(resolve, 1000));
         launchScheduler();
+    } else if (!existing.schedulerRunning) {
+        launchScheduler();
+    } else {
+        console.log('   Keeping existing scheduler.');
     }
 
     // Tunnel
-    if (await isTunnelConfigured()) {
-        if (existing.tunnelRunning && existing.tunnelPid) {
-            const answer = await ask(`🌐 Tunnel is already running (PID ${existing.tunnelPid}). Restart it? [y/N] `);
-            if (answer === 'y' || answer === 'yes') {
-                console.log('   Stopping tunnel...');
-                killPid(existing.tunnelPid);
-                await new Promise(resolve => setTimeout(resolve, 1000));
-                await launchTunnel();
-            } else {
-                console.log('   Keeping existing tunnel.');
-            }
-        } else {
-            await launchTunnel();
-        }
-    } else {
+    if (!tunnelConfigured) {
         console.log('🌐 Tunnel not configured (skipping).');
+    } else if (existing.tunnelRunning && existing.tunnelPid && restartTunnel) {
+        console.log('   Stopping tunnel...');
+        killPid(existing.tunnelPid);
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        await launchTunnel();
+    } else if (!existing.tunnelRunning) {
+        await launchTunnel();
+    } else {
+        console.log('   Keeping existing tunnel.');
     }
 
     process.on('SIGINT', shutdown);
