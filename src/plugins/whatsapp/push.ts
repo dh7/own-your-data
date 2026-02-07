@@ -71,7 +71,7 @@ async function uploadFileToGitHub(
 async function main() {
     const config = await loadConfig();
     const paths = getResolvedPaths(config);
-    const pluginConfig = await loadPluginConfig('whatsapp') as WhatsAppPluginConfig | null;
+    const pluginConfig = await loadPluginConfig<WhatsAppPluginConfig>('whatsapp');
     const whatsappConfig = pluginConfig || DEFAULT_CONFIG;
 
     const pushDays = whatsappConfig.pushDays ?? DEFAULT_CONFIG.pushDays ?? 7;

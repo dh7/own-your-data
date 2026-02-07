@@ -103,10 +103,13 @@ export interface TunnelConfig {
  */
 export interface BasePluginConfig {
     /** Whether this plugin is enabled */
-    enabled?: boolean;
+    enabled: boolean;
 
     /** GitHub path for this plugin's data */
     githubPath?: string;
+
+    /** Allow extra fields from plugin-specific configs */
+    [key: string]: unknown;
 }
 
 /**
