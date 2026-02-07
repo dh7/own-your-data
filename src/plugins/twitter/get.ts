@@ -11,7 +11,7 @@
 import { chromium, Page } from 'playwright';
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { loadConfig, getResolvedPaths, getTodayString } from '../../config/config';
+import { loadConfig, loadPluginConfig, getResolvedPaths, getTodayString } from '../../config/config';
 import { TwitterPluginConfig, DEFAULT_CONFIG } from './config';
 
 interface Tweet {
@@ -219,7 +219,7 @@ async function main() {
     const paths = getResolvedPaths(config);
 
     // Get plugin-specific config
-    const pluginConfig = (config as any).plugins?.twitter as TwitterPluginConfig | undefined;
+    const pluginConfig = await loadPluginConfig<TwitterPluginConfig>('twitter');
     const twitterConfig = pluginConfig || DEFAULT_CONFIG;
 
     // Use plugin paths

@@ -9,7 +9,7 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import { MindCache } from 'mindcache';
 import { GitStore, MindCacheSync } from '@mindcache/gitstore';
-import { loadConfig, getResolvedPaths, loadGitHubConfig, getTodayString } from '../../config/config';
+import { loadConfig, loadPluginConfig, getResolvedPaths, loadGitHubConfig, getTodayString } from '../../config/config';
 import { InstagramPluginConfig, DEFAULT_CONFIG } from './config';
 
 interface InstaPost {
@@ -66,7 +66,7 @@ async function main() {
     const paths = getResolvedPaths(config);
 
     // Get plugin-specific config
-    const pluginConfig = (config as any).plugins?.instagram as InstagramPluginConfig | undefined;
+    const pluginConfig = await loadPluginConfig<InstagramPluginConfig>('instagram');
     const instagramConfig = pluginConfig || DEFAULT_CONFIG;
 
     console.log(`📸 Instagram Push - Syncing to GitHub`);

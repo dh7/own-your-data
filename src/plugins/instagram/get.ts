@@ -11,7 +11,7 @@
 import { chromium, Page, BrowserContext } from 'playwright';
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { loadConfig, getResolvedPaths, getTodayString } from '../../config/config';
+import { loadConfig, loadPluginConfig, getResolvedPaths, getTodayString } from '../../config/config';
 
 import { InstagramPluginConfig, DEFAULT_CONFIG } from './config';
 
@@ -335,7 +335,7 @@ async function main() {
     const paths = getResolvedPaths(config);
 
     // Get plugin-specific config
-    const pluginConfig = (config as any).plugins?.instagram as InstagramPluginConfig | undefined;
+    const pluginConfig = await loadPluginConfig<InstagramPluginConfig>('instagram');
     const instagramConfig = pluginConfig || DEFAULT_CONFIG;
 
     // Use plugin paths
