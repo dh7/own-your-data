@@ -120,6 +120,7 @@ export function parseFormData(body: Record<string, string>): WhatsAppPluginConfi
     return {
         enabled: body.enabled === 'on',
         githubPath: body.githubPath || DEFAULT_CONFIG.githubPath,
+        pushDays: parseInt(body.pushDays, 10) || DEFAULT_CONFIG.pushDays,
     };
 }
 

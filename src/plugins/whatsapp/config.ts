@@ -2,17 +2,17 @@
  * WhatsApp plugin configuration types and defaults
  */
 
-import { BasePluginConfig } from '../types';
-
 /**
  * WhatsApp-specific configuration
  */
+import { BasePluginConfig } from '../types';
+
 export interface WhatsAppPluginConfig extends BasePluginConfig {
     /** GitHub path for this plugin's data */
     githubPath: string;
 
     /** Number of days to push to GitHub (default: 7) */
-    pushDays: number;
+    pushDays?: number;
 }
 
 /**
