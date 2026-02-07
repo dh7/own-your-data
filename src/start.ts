@@ -5,11 +5,15 @@
  * - config server (`npm run config`)
  * - scheduler daemon (`npm run scheduler`, if not already running)
  * - tunnel server (`npm run tunnel`, if configured)
+ *
+ * If services are already running, prompts the user to restart or keep them.
  */
 
 import { ChildProcess, spawn } from 'child_process';
+import * as net from 'net';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import * as readline from 'readline';
 
 const CWD = process.cwd();
 const NPM_CMD = process.platform === 'win32' ? 'npm.cmd' : 'npm';
@@ -27,6 +31,8 @@ const MAX_CONFIG_RETRIES = 5;
 const FAST_EXIT_MS = 5_000;
 let configRestartCount = 0;
 let configLastStart = 0;
+
+// ============ HELPERS ============
 
 function spawnScript(script: string): ChildProcess {
     return spawn(NPM_CMD, ['run', script], {
@@ -53,27 +59,68 @@ function isPidAlive(pid: number): boolean {
     }
 }
 
-async function schedulerAlreadyRunning(): Promise<boolean> {
+function killPid(pid: number): void {
     try {
-        const data = await fs.readFile(SCHEDULER_PID_PATH, 'utf-8');
-        const pid = parseInt(data.trim(), 10);
-        if (Number.isNaN(pid)) return false;
-        return isPidAlive(pid);
+        process.kill(pid, 'SIGTERM');
     } catch {
-        return false;
+        // ignore
     }
 }
 
-async function tunnelAlreadyRunning(): Promise<boolean> {
+function isPortInUse(port: number): Promise<boolean> {
+    return new Promise((resolve) => {
+        const sock = new net.Socket();
+        sock.setTimeout(1000);
+        sock.once('connect', () => { sock.destroy(); resolve(true); });
+        sock.once('error', () => { sock.destroy(); resolve(false); });
+        sock.once('timeout', () => { sock.destroy(); resolve(false); });
+        sock.connect(port, '127.0.0.1');
+    });
+}
+
+async function readPidFile(pidPath: string): Promise<number | null> {
     try {
-        const data = await fs.readFile(TUNNEL_PID_PATH, 'utf-8');
+        const data = await fs.readFile(pidPath, 'utf-8');
         const pid = parseInt(data.trim(), 10);
-        if (Number.isNaN(pid)) return false;
-        return isPidAlive(pid);
+        return Number.isNaN(pid) ? null : pid;
     } catch {
-        return false;
+        return null;
     }
 }
+
+async function ask(question: string): Promise<string> {
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    return new Promise((resolve) => {
+        rl.question(question, (answer) => {
+            rl.close();
+            resolve(answer.trim().toLowerCase());
+        });
+    });
+}
+
+// ============ DETECT EXISTING SERVICES ============
+
+interface ExistingServices {
+    configRunning: boolean;
+    schedulerRunning: boolean;
+    schedulerPid: number | null;
+    tunnelRunning: boolean;
+    tunnelPid: number | null;
+}
+
+async function detectExisting(): Promise<ExistingServices> {
+    const configRunning = await isPortInUse(3456);
+
+    const schedulerPid = await readPidFile(SCHEDULER_PID_PATH);
+    const schedulerRunning = schedulerPid !== null && isPidAlive(schedulerPid);
+
+    const tunnelPid = await readPidFile(TUNNEL_PID_PATH);
+    const tunnelRunning = tunnelPid !== null && isPidAlive(tunnelPid);
+
+    return { configRunning, schedulerRunning, schedulerPid, tunnelRunning, tunnelPid };
+}
+
+// ============ SERVICE LAUNCHERS ============
 
 async function isTunnelConfigured(): Promise<boolean> {
     try {
@@ -93,7 +140,7 @@ async function isTunnelConfigured(): Promise<boolean> {
     }
 }
 
-function startConfig(): void {
+function launchConfig(): void {
     console.log('🧩 Starting config server...');
     configLastStart = Date.now();
     configProcess = spawnScript('config');
@@ -103,7 +150,6 @@ function startConfig(): void {
 
         const uptime = Date.now() - configLastStart;
 
-        // If server ran for a while, reset failure count
         if (uptime > FAST_EXIT_MS) {
             configRestartCount = 0;
         } else {
@@ -118,17 +164,12 @@ function startConfig(): void {
         const delay = uptime > FAST_EXIT_MS ? 1_000 : Math.min(1_000 * Math.pow(2, configRestartCount), 60_000);
         console.log(`⚠️ Config server exited (${signal || code}). Restarting in ${Math.round(delay / 1000)}s...`);
         setTimeout(() => {
-            if (!shuttingDown) startConfig();
+            if (!shuttingDown) launchConfig();
         }, delay);
     });
 }
 
-async function startScheduler(): Promise<void> {
-    if (await schedulerAlreadyRunning()) {
-        console.log('🤖 Scheduler already running (using existing process).');
-        return;
-    }
-
+function launchScheduler(): void {
     console.log('🤖 Starting scheduler daemon...');
     schedulerProcess = spawnScript('scheduler');
     schedulerStartedHere = true;
@@ -140,15 +181,9 @@ async function startScheduler(): Promise<void> {
     });
 }
 
-async function startTunnel(): Promise<void> {
-    // Only start if configured
+async function launchTunnel(): Promise<void> {
     if (!(await isTunnelConfigured())) {
         console.log('🌐 Tunnel not configured (skipping).');
-        return;
-    }
-    
-    if (await tunnelAlreadyRunning()) {
-        console.log('🌐 Tunnel already running (using existing process).');
         return;
     }
 
@@ -162,6 +197,8 @@ async function startTunnel(): Promise<void> {
         console.log(`ℹ️ Tunnel exited (${signal || code}).`);
     });
 }
+
+// ============ LIFECYCLE ============
 
 function shutdown(): void {
     if (shuttingDown) return;
@@ -180,10 +217,58 @@ function shutdown(): void {
 }
 
 async function main(): Promise<void> {
-    console.log('🚀 Own Your Data start');
-    startConfig();
-    await startScheduler();
-    await startTunnel();
+    console.log('🚀 Own Your Data start\n');
+
+    const existing = await detectExisting();
+
+    // Config server
+    if (existing.configRunning) {
+        const answer = await ask('🧩 Config server is already running on port 3456. Restart it? [y/N] ');
+        if (answer === 'y' || answer === 'yes') {
+            console.log('   Stopping config server...');
+            await fetch('http://127.0.0.1:3456/shutdown', { method: 'POST' }).catch(() => {});
+            await new Promise(resolve => setTimeout(resolve, 1500));
+            launchConfig();
+        } else {
+            console.log('   Keeping existing config server.');
+        }
+    } else {
+        launchConfig();
+    }
+
+    // Scheduler
+    if (existing.schedulerRunning && existing.schedulerPid) {
+        const answer = await ask(`🤖 Scheduler is already running (PID ${existing.schedulerPid}). Restart it? [y/N] `);
+        if (answer === 'y' || answer === 'yes') {
+            console.log('   Stopping scheduler...');
+            killPid(existing.schedulerPid);
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            launchScheduler();
+        } else {
+            console.log('   Keeping existing scheduler.');
+        }
+    } else {
+        launchScheduler();
+    }
+
+    // Tunnel
+    if (await isTunnelConfigured()) {
+        if (existing.tunnelRunning && existing.tunnelPid) {
+            const answer = await ask(`🌐 Tunnel is already running (PID ${existing.tunnelPid}). Restart it? [y/N] `);
+            if (answer === 'y' || answer === 'yes') {
+                console.log('   Stopping tunnel...');
+                killPid(existing.tunnelPid);
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                await launchTunnel();
+            } else {
+                console.log('   Keeping existing tunnel.');
+            }
+        } else {
+            await launchTunnel();
+        }
+    } else {
+        console.log('🌐 Tunnel not configured (skipping).');
+    }
 
     process.on('SIGINT', shutdown);
     process.on('SIGTERM', shutdown);
