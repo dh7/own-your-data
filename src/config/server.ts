@@ -56,7 +56,7 @@ import {
   teardownTunnel,
 } from '../tunnel/cloudflare-api';
 import { PROXY_PORT } from '../tunnel/proxy';
-import { getAvailableCommands, resolveSchedulerPluginConfig } from '../scheduler/config';
+import { getAvailableCommands, resolvePluginSchedule } from '../scheduler/config';
 
 const app = express();
 const PORT = 3456;
@@ -299,26 +299,24 @@ async function stopSchedulerDaemonProcess(): Promise<void> {
 }
 
 async function startAutoStartPluginServers(): Promise<void> {
-  const config = await loadConfig();
   const plugins = await discoverPlugins();
   for (const plugin of plugins) {
     if (!plugin.manifest.commands.server || plugin.manifest.commands.server.trim().length === 0) {
       continue;
     }
-    const scheduler = resolveSchedulerPluginConfig(config, plugin);
+    const scheduler = await resolvePluginSchedule(plugin);
     if (!scheduler.enabled || !scheduler.autoStartServer) continue;
     await startServiceByCommand(getPluginServiceId(plugin.manifest.id), plugin.manifest.commands.server);
   }
 }
 
 async function stopAutoStartPluginServers(): Promise<void> {
-  const config = await loadConfig();
   const plugins = await discoverPlugins();
   for (const plugin of plugins) {
     if (!plugin.manifest.commands.server || plugin.manifest.commands.server.trim().length === 0) {
       continue;
     }
-    const scheduler = resolveSchedulerPluginConfig(config, plugin);
+    const scheduler = await resolvePluginSchedule(plugin);
     if (!scheduler.autoStartServer) continue;
     await stopServiceByPid(getPluginServiceId(plugin.manifest.id));
   }
@@ -449,18 +447,12 @@ app.get('/', async (req, res) => {
     const pluginConfig = await loadPluginConfig(discovered.manifest.id) 
       || (config.plugins?.[discovered.manifest.id] as PluginConfig | undefined) 
       || plugin.getDefaultConfig();
-    const schedulerConfig = resolveSchedulerPluginConfig(config, discovered);
+    const schedulerConfig = await resolvePluginSchedule(discovered);
     const availableCommands = getAvailableCommands(discovered);
     const hasServer = typeof discovered.manifest.commands.server === 'string' && discovered.manifest.commands.server.trim().length > 0;
 
-    // Read server settings from scheduler.json (source of truth for the daemon)
-    const schedulerJson = await loadSchedulerConfig();
-    const serverCfg = schedulerJson.servers[discovered.manifest.id];
-    const autoStartServer = serverCfg?.autoStart ?? false;
-    const autoRestartServer = serverCfg?.restartOnCrash ?? true;
-
     const scheduleText = availableCommands.length === 0
-      ? (autoStartServer
+      ? (schedulerConfig.autoStartServer
         ? '<span style="color:#8b949e">Server managed</span>'
         : '<span style="color:#8b949e">Disabled</span>')
       : describeSchedule(schedulerConfig);
@@ -480,8 +472,8 @@ app.get('/', async (req, res) => {
         fixedTimes: schedulerConfig.fixedTimes,
         commands: schedulerConfig.commands,
         availableCommands,
-        autoStartServer,
-        autoRestartServer,
+        autoStartServer: schedulerConfig.autoStartServer,
+        autoRestartServer: schedulerConfig.autoRestartServer,
         hasServer,
         scheduleText,
       });
@@ -682,7 +674,6 @@ app.post('/daemon', async (req, res) => {
 
 app.post('/scheduler/plugin/:id', async (req, res) => {
   const pluginId = req.params.id;
-  const config = await loadConfig();
   const plugins = await discoverPlugins();
   const plugin = plugins.find(p => p.manifest.id === pluginId);
 
@@ -691,7 +682,7 @@ app.post('/scheduler/plugin/:id', async (req, res) => {
     return;
   }
 
-  const existing = resolveSchedulerPluginConfig(config, plugin);
+  const existing = await resolvePluginSchedule(plugin);
   const rawCommands = req.body.commands;
   const commandList = Array.isArray(rawCommands)
     ? rawCommands
@@ -728,22 +719,45 @@ app.post('/scheduler/plugin/:id', async (req, res) => {
     autoRestartServer: req.body.autoRestartServer === 'on',
   };
 
-  // Save server settings to config/scheduler.json
+  // Save everything to config/scheduler.json (source of truth)
   const schedulerJson = await loadSchedulerConfig();
+
+  // Update server settings
   if (plugin.manifest.commands.server?.trim()) {
     schedulerJson.servers[pluginId] = {
       autoStart: nextConfig.autoStartServer,
       restartOnCrash: nextConfig.autoRestartServer,
     };
   }
-  await saveSchedulerConfig(schedulerJson);
 
-  // Also save scheduling (tasks) to legacy config for backward compat
-  if (!config.schedulerConfig) {
-    config.schedulerConfig = { plugins: {} };
+  // Update tasks: remove any existing task that includes this plugin
+  schedulerJson.tasks = schedulerJson.tasks.filter(
+    t => !t.plugins.includes(pluginId)
+  );
+
+  // Add new task for this plugin
+  if (nextConfig.enabled) {
+    const task: import('../config/config').SchedulerTask = {
+      plugins: [pluginId],
+      commands: nextConfig.commands,
+      ...(nextConfig.cadence === 'fixed' && nextConfig.fixedTimes.length > 0
+        ? { fixedTimes: nextConfig.fixedTimes }
+        : {
+            intervalHours: nextConfig.intervalHours,
+            jitterMinutes: nextConfig.jitterMinutes,
+          }),
+    };
+    schedulerJson.tasks.push(task);
+  } else {
+    // Disabled → store as manual task so it's explicitly off
+    schedulerJson.tasks.push({
+      plugins: [pluginId],
+      commands: nextConfig.commands,
+      schedule: 'manual',
+    });
   }
-  config.schedulerConfig.plugins[pluginId] = nextConfig;
-  await saveConfig(config);
+
+  await saveSchedulerConfig(schedulerJson);
 
   res.redirect('/?saved=services');
 });
