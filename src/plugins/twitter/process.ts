@@ -9,8 +9,7 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { MindCache } from 'mindcache';
-import { loadConfig, loadPluginConfig, getResolvedPaths } from '../../config/config';
-import { TwitterPluginConfig, DEFAULT_CONFIG } from './config';
+import { loadConfig, getResolvedPaths } from '../../config/config';
 
 interface Tweet {
     id: string;
@@ -27,53 +26,54 @@ interface Tweet {
     likeCount: number;
 }
 
-
-
 async function main() {
     console.log('🐦 Twitter Process - Generating MindCache files per day\n');
 
     const config = await loadConfig();
     const paths = getResolvedPaths(config);
 
-    // Get plugin-specific config
-    const pluginConfig = await loadPluginConfig<TwitterPluginConfig>('twitter');
-    const twitterConfig = pluginConfig || DEFAULT_CONFIG;
-
-    const accounts = twitterConfig.accounts || [];
-
-    if (accounts.length === 0) {
-        console.log('⚠️ No Twitter accounts configured.');
-        process.exit(0);
-    }
-
-    // Use plugin paths
     const rawDumpsDir = path.join(paths.rawDumps, 'twitter');
     const outputDir = path.join(paths.connectorData, 'twitter');
 
     await fs.mkdir(outputDir, { recursive: true });
 
-    console.log(`📅 Processing all available tweets...`);
+    // Discover accounts from whatever JSON files exist in raw-dumps/twitter/
+    let files: string[];
+    try {
+        files = (await fs.readdir(rawDumpsDir)).filter(f => f.endsWith('.json'));
+    } catch {
+        console.log('⚠️ No raw-dumps/twitter/ directory found.');
+        process.exit(0);
+    }
 
-    // Collect all tweets from all accounts, grouped by date
+    if (files.length === 0) {
+        console.log('⚠️ No JSON files found in raw-dumps/twitter/.');
+        process.exit(0);
+    }
+
+    console.log(`📅 Processing ${files.length} raw dump files...\n`);
+
+    // Collect all tweets from all files, grouped by date
     // Map: dateStr -> Map: username -> tweets[]
     const tweetsByDate = new Map<string, Map<string, Tweet[]>>();
 
-    for (const username of accounts) {
+    for (const file of files) {
+        const username = file.replace('.json', '');
         console.log(`   📥 Loading @${username}...`);
 
-        const rawPath = path.join(rawDumpsDir, `${username}.json`);
+        const rawPath = path.join(rawDumpsDir, file);
 
         let tweets: Tweet[] = [];
         try {
             const data = await fs.readFile(rawPath, 'utf-8');
             tweets = JSON.parse(data);
         } catch {
-            console.log(`      ⚠️ No raw data found for @${username}`);
+            console.log(`      ⚠️ Failed to parse ${file}`);
             continue;
         }
 
         if (tweets.length === 0) {
-            console.log(`      ⚠️ No tweets for @${username}`);
+            console.log(`      ⚠️ No tweets in ${file}`);
             continue;
         }
 
@@ -162,7 +162,7 @@ async function main() {
     }
 
     console.log(`\n📊 Summary:`);
-    console.log(`   Accounts processed: ${accounts.length}`);
+    console.log(`   Raw dump files: ${files.length}`);
     console.log(`   Days with tweets: ${filesGenerated}`);
     console.log(`   Total tweets: ${totalTweets}`);
     console.log(`\n✨ Done! Files saved to: ${outputDir}`);

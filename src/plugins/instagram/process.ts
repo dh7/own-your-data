@@ -11,8 +11,7 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { MindCache } from 'mindcache';
-import { loadConfig, loadPluginConfig, getResolvedPaths } from '../../config/config';
-import { InstagramPluginConfig, DEFAULT_CONFIG } from './config';
+import { loadConfig, getResolvedPaths } from '../../config/config';
 
 interface InstaPost {
     id: string;
@@ -411,18 +410,6 @@ async function main() {
     const config = await loadConfig();
     const paths = getResolvedPaths(config);
 
-    // Get plugin-specific config
-    const pluginConfig = await loadPluginConfig<InstagramPluginConfig>('instagram');
-    const instagramConfig = pluginConfig || DEFAULT_CONFIG;
-
-    const accounts = instagramConfig.accounts || [];
-
-    if (accounts.length === 0) {
-        console.log('⚠️ No Instagram accounts configured.');
-        process.exit(0);
-    }
-
-    // Use plugin paths
     const rawDumpsDir = path.join(paths.rawDumps, 'instagram');
     const outputDir = path.join(paths.connectorData, 'instagram');
     const imagesOutputDir = path.join(outputDir, 'images');
@@ -430,29 +417,46 @@ async function main() {
     await fs.mkdir(outputDir, { recursive: true });
     await fs.mkdir(imagesOutputDir, { recursive: true });
 
-    // Collect all posts from all accounts, grouped by date
+    // Discover accounts from whatever JSON files exist in raw-dumps/instagram/
+    let files: string[];
+    try {
+        files = (await fs.readdir(rawDumpsDir)).filter(f => f.endsWith('.json'));
+    } catch {
+        console.log('⚠️ No raw-dumps/instagram/ directory found.');
+        process.exit(0);
+    }
+
+    if (files.length === 0) {
+        console.log('⚠️ No JSON files found in raw-dumps/instagram/.');
+        process.exit(0);
+    }
+
+    console.log(`📅 Processing ${files.length} raw dump files...\n`);
+
+    // Collect all posts from all files, grouped by date
     // Map: dateStr -> Map: username -> posts[]
     const postsByDate = new Map<string, Map<string, InstaPost[]>>();
     const allPostsByUsername = new Map<string, InstaPost[]>();
 
     let totalImages = 0;
 
-    for (const username of accounts) {
+    for (const file of files) {
+        const username = file.replace('.json', '');
         console.log(`   📥 Loading @${username}...`);
 
-        const dumpPath = path.join(rawDumpsDir, `${username}.json`);
+        const dumpPath = path.join(rawDumpsDir, file);
 
         let posts: InstaPost[] = [];
         try {
             const data = await fs.readFile(dumpPath, 'utf-8');
             posts = JSON.parse(data);
         } catch {
-            console.log(`      ⚠️ No data found for @${username}`);
+            console.log(`      ⚠️ Failed to parse ${file}`);
             continue;
         }
 
         if (posts.length === 0) {
-            console.log(`      ⚠️ No posts for @${username}`);
+            console.log(`      ⚠️ No posts in ${file}`);
             continue;
         }
 
@@ -552,7 +556,7 @@ async function main() {
     }
 
     console.log(`\n📊 Summary:`);
-    console.log(`   Accounts processed: ${accounts.length}`);
+    console.log(`   Raw dump files: ${files.length}`);
     console.log(`   Days with posts: ${filesGenerated}`);
     console.log(`   Total posts: ${totalPosts}`);
     console.log(`   Total images: ${totalImages}`);
