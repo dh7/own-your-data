@@ -59,6 +59,38 @@ function renderCommandToggles(plugin: SchedulerPluginEditor): string {
     }).join('');
 }
 
+function renderManualTriggerButtons(plugin: SchedulerPluginEditor): string {
+    if (plugin.availableCommands.length === 0) return '';
+
+    const commandIcons: Record<SchedulerCommand, string> = {
+        get: '📥',
+        process: '⚙️',
+        push: '📤',
+    };
+    const commandLabels: Record<SchedulerCommand, string> = {
+        get: 'Get',
+        process: 'Process',
+        push: 'Push',
+    };
+
+    const buttons = plugin.availableCommands.map(command => {
+        return `<button type="button" class="btn small-btn secondary" onclick="runPluginCommand('${plugin.id}','${command}',this)">${commandIcons[command]} ${commandLabels[command]}</button>`;
+    }).join(' ');
+
+    const allBtn = plugin.availableCommands.length > 1
+        ? ` <button type="button" class="btn small-btn" onclick="runPluginCommandChain('${plugin.id}',${JSON.stringify(plugin.availableCommands)},this)">▶️ Run All</button>`
+        : '';
+
+    return `
+    <div style="padding:0.6rem; border:1px solid #30363d; border-radius:6px;">
+        <div style="margin-bottom:0.4rem; color:#8b949e; font-size:0.85em;">Manual trigger</div>
+        <div style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center;">
+            ${buttons}${allBtn}
+            <span id="run-status-${plugin.id}" style="font-size:0.85em; color:#8b949e;"></span>
+        </div>
+    </div>`;
+}
+
 function renderServiceActions(service: SchedulerServiceStatus): string {
     const actions = service.actions || [];
     if (!actions.length) return '';
@@ -179,6 +211,8 @@ export function renderSchedulerSection(
                                 This plugin is server-managed. No scheduled command chain is required.
                             </div>
                         `}
+
+                        ${renderManualTriggerButtons(plugin)}
 
                         ${plugin.hasServer ? `
                             <div style="display:flex; flex-direction:column; gap:0.5rem; margin-top:0.35rem;">

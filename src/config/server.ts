@@ -749,6 +749,70 @@ app.post('/scheduler/plugin/:id', async (req, res) => {
 });
 
 
+// Manually trigger a plugin command (get, process, push)
+app.post('/scheduler/run/:pluginId/:command', async (req, res) => {
+  const { pluginId, command } = req.params;
+
+  if (!['get', 'process', 'push'].includes(command)) {
+    res.status(400).json({ success: false, error: 'Invalid command. Must be get, process, or push.' });
+    return;
+  }
+
+  try {
+    const plugins = await discoverPlugins();
+    const plugin = plugins.find(p => p.manifest.id === pluginId);
+
+    if (!plugin) {
+      res.status(404).json({ success: false, error: `Plugin not found: ${pluginId}` });
+      return;
+    }
+
+    const cmd = plugin.manifest.commands[command as keyof typeof plugin.manifest.commands];
+    if (!cmd || cmd.trim().length === 0) {
+      res.status(400).json({ success: false, error: `Plugin ${pluginId} has no "${command}" command.` });
+      return;
+    }
+
+    console.log(`▶️ Manual run: ${pluginId}:${command} → ${cmd}`);
+
+    const { spawn } = await import('child_process');
+    const child = spawn(cmd, {
+      cwd: process.cwd(),
+      shell: true,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+
+    let stdout = '';
+    let stderr = '';
+
+    child.stdout?.on('data', (data: Buffer) => {
+      stdout += data.toString();
+      process.stdout.write(data);
+    });
+    child.stderr?.on('data', (data: Buffer) => {
+      stderr += data.toString();
+      process.stderr.write(data);
+    });
+
+    child.on('close', (code) => {
+      if (code === 0) {
+        console.log(`✅ ${pluginId}:${command} completed`);
+        res.json({ success: true, output: stdout, stderr });
+      } else {
+        console.error(`❌ ${pluginId}:${command} failed with code ${code}`);
+        res.json({ success: false, error: `Exited with code ${code}`, output: stdout, stderr });
+      }
+    });
+
+    child.on('error', (err) => {
+      console.error(`❌ ${pluginId}:${command} error:`, err.message);
+      res.json({ success: false, error: err.message });
+    });
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
 // Save GitHub config
 app.post('/github', async (req, res) => {
   const { token, owner, repo } = req.body;

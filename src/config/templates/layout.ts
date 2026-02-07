@@ -1129,6 +1129,75 @@ export function renderLayout(sections: string[], options: LayoutOptions = {}): s
         }
     }
 
+    async function runPluginCommand(pluginId, command, btn) {
+        const statusEl = document.getElementById('run-status-' + pluginId);
+        const originalText = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = '⏳';
+        if (statusEl) statusEl.textContent = 'Running ' + command + '...';
+
+        try {
+            const res = await fetch('/scheduler/run/' + encodeURIComponent(pluginId) + '/' + encodeURIComponent(command), { method: 'POST' });
+            const data = await res.json();
+            if (data.success) {
+                btn.textContent = '✅';
+                if (statusEl) statusEl.textContent = '✅ ' + command + ' completed';
+                if (statusEl) statusEl.style.color = '#7ee787';
+            } else {
+                throw new Error(data.error || 'Command failed');
+            }
+        } catch (e) {
+            btn.textContent = '❌';
+            if (statusEl) statusEl.textContent = '❌ ' + (e.message || 'Failed');
+            if (statusEl) statusEl.style.color = '#f85149';
+        }
+        setTimeout(() => {
+            btn.disabled = false;
+            btn.textContent = originalText;
+        }, 2000);
+    }
+
+    async function runPluginCommandChain(pluginId, commands, btn) {
+        const statusEl = document.getElementById('run-status-' + pluginId);
+        const originalText = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = '⏳';
+
+        for (let i = 0; i < commands.length; i++) {
+            const command = commands[i];
+            if (statusEl) {
+                statusEl.textContent = '⏳ Running ' + command + ' (' + (i + 1) + '/' + commands.length + ')...';
+                statusEl.style.color = '#d2a8ff';
+            }
+            try {
+                const res = await fetch('/scheduler/run/' + encodeURIComponent(pluginId) + '/' + encodeURIComponent(command), { method: 'POST' });
+                const data = await res.json();
+                if (!data.success) {
+                    throw new Error(data.error || command + ' failed');
+                }
+            } catch (e) {
+                btn.textContent = '❌';
+                btn.disabled = false;
+                if (statusEl) {
+                    statusEl.textContent = '❌ ' + command + ': ' + (e.message || 'Failed');
+                    statusEl.style.color = '#f85149';
+                }
+                setTimeout(() => { btn.textContent = originalText; }, 2000);
+                return;
+            }
+        }
+
+        btn.textContent = '✅';
+        if (statusEl) {
+            statusEl.textContent = '✅ All commands completed';
+            statusEl.style.color = '#7ee787';
+        }
+        setTimeout(() => {
+            btn.disabled = false;
+            btn.textContent = originalText;
+        }, 2000);
+    }
+
     function syncSchedulerCadenceUi(pluginId) {
         const select = document.querySelector('.scheduler-cadence[data-plugin-id="' + pluginId + '"]');
         if (!select) return;
