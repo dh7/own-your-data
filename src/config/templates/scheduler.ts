@@ -109,7 +109,9 @@ function renderServiceRows(services: SchedulerServiceStatus[], emptyLabel: strin
     return services.map(service => {
         const icon = service.icon || '🖥️';
         const statusColor = service.running ? '#7ee787' : '#f85149';
-        const statusLabel = service.running ? 'Running' : 'Stopped';
+        const statusLabel = service.running
+            ? (service.id === 'config-server' ? 'Ready' : 'Running')
+            : 'Stopped';
         const logsBtn = service.id !== 'config-server'
             ? ` <button type="button" class="btn small-btn secondary" onclick="viewServiceLogs('${service.id}')">Logs</button>`
             : '';
