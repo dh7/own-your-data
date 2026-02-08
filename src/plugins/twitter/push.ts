@@ -193,9 +193,13 @@ async function main() {
                 instanceName: 'Twitter Scraper',
             });
 
-            await sync.save({ message: `Twitter @${username}: ${tweets.length} tweets` });
-            console.log(`   ✅ Synced ${tweets.length} tweets to ${filePath}`);
-            totalSynced += tweets.length;
+            const result = await sync.save({ message: `Twitter @${username}: ${tweets.length} tweets` });
+            if (result.sha === '') {
+                console.log(`   ⏭️  Skipped @${username} (no changes)`);
+            } else {
+                console.log(`   ✅ Synced ${tweets.length} tweets to ${filePath}`);
+                totalSynced += tweets.length;
+            }
         } catch (error: any) {
             console.error(`   ❌ Failed: ${error.message}`);
         }

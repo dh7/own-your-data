@@ -48,7 +48,7 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "@mindcache/gitstore": "^0.1.0",
+    "@mindcache/gitstore": "^0.1.1",
     "@types/multer": "^2.0.0",
     "apify-client": "^2.21.0",
     "baileys": "^7.0.0-rc.9",
