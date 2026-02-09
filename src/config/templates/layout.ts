@@ -472,6 +472,74 @@ export function renderLayout(sections: string[], options: LayoutOptions = {}): s
             font-size: 0.8rem;
         }
 
+        /* Folder browser modal */
+        .folder-browser-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 10000;
+            background: rgba(0,0,0,0.7);
+            justify-content: center;
+            align-items: center;
+        }
+        .folder-browser-overlay.active { display: flex; }
+        .folder-browser {
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            width: 90vw;
+            max-width: 500px;
+            max-height: 70vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .folder-browser-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid #30363d;
+            color: #c9d1d9;
+            font-weight: 600;
+        }
+        .folder-browser-path {
+            padding: 0.5rem 1rem;
+            font-size: 0.78rem;
+            color: #58a6ff;
+            background: #161b22;
+            border-bottom: 1px solid #30363d;
+            word-break: break-all;
+        }
+        .folder-browser-list {
+            overflow-y: auto;
+            flex: 1;
+            min-height: 0;
+            padding: 0.25rem 0;
+        }
+        .folder-browser-list .fb-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.4rem 1rem;
+            cursor: pointer;
+            color: #c9d1d9;
+            font-size: 0.85rem;
+            border: none;
+            background: none;
+            width: 100%;
+            text-align: left;
+            font-family: inherit;
+        }
+        .folder-browser-list .fb-item:hover { background: #161b22; }
+        .folder-browser-list .fb-item.fb-parent { color: #8b949e; }
+        .folder-browser-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 0.5rem;
+            padding: 0.75rem 1rem;
+            border-top: 1px solid #30363d;
+        }
+
         /* Log viewer modal */
         .log-viewer-overlay {
             display: none;
@@ -544,6 +612,21 @@ export function renderLayout(sections: string[], options: LayoutOptions = {}): s
             </div>
             <div class="log-viewer-body">
                 <pre id="log-viewer-content">Loading...</pre>
+            </div>
+        </div>
+    </div>
+
+    <div class="folder-browser-overlay" id="folder-browser-overlay" onclick="if(event.target===this)closeFolderBrowser()">
+        <div class="folder-browser">
+            <div class="folder-browser-header">
+                <span>📂 Select Folder</span>
+                <button class="btn small-btn secondary" onclick="closeFolderBrowser()">✕</button>
+            </div>
+            <div class="folder-browser-path" id="fb-path">Loading...</div>
+            <div class="folder-browser-list" id="fb-list"></div>
+            <div class="folder-browser-footer">
+                <button class="btn small-btn secondary" onclick="closeFolderBrowser()">Cancel</button>
+                <button class="btn small-btn" onclick="selectCurrentFolder()">Select this folder</button>
             </div>
         </div>
     </div>
@@ -1037,34 +1120,85 @@ export function renderLayout(sections: string[], options: LayoutOptions = {}): s
         });
     }
 
+    // ---- Folder Browser ----
+    let _fbTargetInputId = null;
+    let _fbCurrentPath = null;
+    let _fbRelativePath = null;
+
+    document.getElementById('fb-list').addEventListener('click', function(e) {
+        const btn = e.target.closest('.fb-item');
+        if (btn && btn.dataset.path) loadFolderBrowser(btn.dataset.path);
+    });
+
     async function pickFolder(inputId, btn) {
+        _fbTargetInputId = inputId;
         const input = document.getElementById(inputId);
-        if (!input) return;
-        
-        const originalText = btn.textContent;
-        btn.disabled = true;
-        btn.textContent = '⏳';
-        
+        const startPath = input ? input.value : '';
+        document.getElementById('folder-browser-overlay').classList.add('active');
+        await loadFolderBrowser(startPath || '');
+    }
+
+    async function loadFolderBrowser(dirPath) {
+        const listEl = document.getElementById('fb-list');
+        const pathEl = document.getElementById('fb-path');
+        listEl.innerHTML = '<div style="padding:1rem;color:#8b949e;">Loading...</div>';
+
         try {
-            const res = await fetch('/system/pick-folder', {
+            const res = await fetch('/system/list-dirs', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ startPath: input.value || '' })
+                body: JSON.stringify({ path: dirPath || '' })
             });
             const data = await res.json();
-            
-            if (data.success && data.path) {
-                input.value = data.path;
-                input.dispatchEvent(new Event('change'));
-            } else if (data.error) {
-                alert(data.error);
+            if (!data.success) {
+                listEl.innerHTML = '<div style="padding:1rem;color:#f85149;">Error: ' + (data.error || 'Unknown') + '</div>';
+                return;
+            }
+
+            _fbCurrentPath = data.current;
+            _fbRelativePath = data.relative;
+            pathEl.textContent = data.current;
+
+            const frag = document.createDocumentFragment();
+            if (data.parent && data.parent !== data.current) {
+                const el = document.createElement('button');
+                el.className = 'fb-item fb-parent';
+                el.dataset.path = data.parent;
+                el.textContent = '⬆️ ..';
+                frag.appendChild(el);
+            }
+            for (const d of data.dirs) {
+                const el = document.createElement('button');
+                el.className = 'fb-item';
+                el.dataset.path = data.current + '/' + d;
+                el.textContent = '📁 ' + d;
+                frag.appendChild(el);
+            }
+            listEl.innerHTML = '';
+            if (frag.childNodes.length) {
+                listEl.appendChild(frag);
+            } else {
+                listEl.innerHTML = '<div style="padding:1rem;color:#8b949e;">Empty directory</div>';
             }
         } catch (e) {
-            console.error('Folder picker error:', e);
-        } finally {
-            btn.disabled = false;
-            btn.textContent = originalText;
+            listEl.innerHTML = '<div style="padding:1rem;color:#f85149;">Failed to load</div>';
         }
+    }
+
+    function selectCurrentFolder() {
+        if (_fbTargetInputId && _fbRelativePath != null) {
+            const input = document.getElementById(_fbTargetInputId);
+            if (input) {
+                input.value = _fbRelativePath;
+                input.dispatchEvent(new Event('change'));
+            }
+        }
+        closeFolderBrowser();
+    }
+
+    function closeFolderBrowser() {
+        document.getElementById('folder-browser-overlay').classList.remove('active');
+        _fbTargetInputId = null;
     }
 
     function closeAllPluginPanels() {

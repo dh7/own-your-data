@@ -1670,58 +1670,37 @@ app.post('/system/restart-daemon', async (req, res) => {
   }
 });
 
-// Folder picker endpoint - opens native folder dialog
-app.post('/system/pick-folder', async (req, res) => {
-  const { startPath } = req.body;
+// List directories endpoint - for web-based folder picker
+app.post('/system/list-dirs', async (req, res) => {
+  const { path: reqPath } = req.body;
   const cwd = process.cwd();
-  
+  const targetPath = reqPath || cwd;
+
   try {
-    const platform = process.platform;
-    let selectedPath: string | null = null;
+    const resolved = path.resolve(targetPath);
+    const entries = await fs.readdir(resolved, { withFileTypes: true });
+    const dirs = entries
+      .filter((e: any) => e.isDirectory() && !e.name.startsWith('.'))
+      .map((e: any) => e.name)
+      .sort((a: string, b: string) => a.localeCompare(b));
 
-    if (platform === 'darwin') {
-      // macOS: use osascript
-      const script = `
-        set startFolder to POSIX file "${startPath || cwd}" as alias
-        try
-          set selectedFolder to choose folder with prompt "Select folder" default location startFolder
-          return POSIX path of selectedFolder
-        on error
-          return ""
-        end try
-      `;
-      const result = await new Promise<string>((resolve, reject) => {
-        exec(`osascript -e '${script.replace(/'/g, "'\"'\"'")}'`, (err, stdout) => {
-          if (err) reject(err);
-          else resolve(stdout.trim());
-        });
-      });
-      selectedPath = result || null;
-    } else if (platform === 'linux') {
-      // Linux: try zenity or kdialog
-      const result = await new Promise<string>((resolve) => {
-        exec(`zenity --file-selection --directory --filename="${startPath || cwd}/" 2>/dev/null || kdialog --getexistingdirectory "${startPath || cwd}" 2>/dev/null`, (err, stdout) => {
-          resolve(stdout.trim());
-        });
-      });
-      selectedPath = result || null;
-    } else {
-      // Windows or unsupported - return error
-      res.json({ success: false, error: 'Folder picker not supported on this platform. Please type the path manually.' });
-      return;
+    // Make path relative to cwd for display if inside cwd
+    let displayPath = resolved;
+    let relativePath = resolved;
+    if (resolved.startsWith(cwd + '/') || resolved === cwd) {
+      relativePath = resolved === cwd ? '.' : './' + resolved.slice(cwd.length + 1);
     }
 
-    if (selectedPath) {
-      // Make path relative to cwd if it's inside cwd
-      if (selectedPath.startsWith(cwd + '/')) {
-        selectedPath = './' + selectedPath.slice(cwd.length + 1);
-      }
-      res.json({ success: true, path: selectedPath });
-    } else {
-      res.json({ success: false, error: 'No folder selected' });
-    }
+    res.json({
+      success: true,
+      current: resolved,
+      relative: relativePath,
+      parent: path.dirname(resolved),
+      dirs,
+      cwd,
+    });
   } catch (e: any) {
-    console.error('Folder picker error:', e.message);
+    console.error('List dirs error:', e.message);
     res.json({ success: false, error: e.message });
   }
 });
