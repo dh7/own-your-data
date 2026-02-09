@@ -34,7 +34,7 @@
     "chrome:push": "ts-node src/plugins/chrome-history/push.ts",
     "transcript:process": "ts-node src/plugins/transcripts/process.ts",
     "transcript:push": "ts-node src/plugins/transcripts/push.ts",
-    "datastore-sync:push": "ts-node src/plugins/datastore-sync/push.ts",
+    "github-backup:push": "ts-node src/plugins/github-backup/push.ts",
     "build": "tsc",
     "test": "echo \"Error: no test specified\" && exit 1"
   },

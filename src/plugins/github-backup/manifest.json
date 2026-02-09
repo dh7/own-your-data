@@ -1,0 +1,19 @@
+{
+    "id": "github-backup",
+    "name": "GitHub Backup",
+    "icon": "📦",
+    "description": "Git add, commit and push a local directory to the GitHub vault repo",
+    "version": "2.0.0",
+    "folder": "github-backup",
+    "scheduler": {
+        "mode": "manual",
+        "cmd": ["push"]
+    },
+    "commands": {
+        "push": "ts-node src/plugins/github-backup/push.ts"
+    },
+    "dependencies": {
+        "playwright": false,
+        "requiresLogin": false
+    }
+}

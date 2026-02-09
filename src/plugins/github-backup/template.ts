@@ -1,13 +1,13 @@
 import { BasePluginConfig, PluginRenderData } from '../types';
-import { DatastoreSyncConfig, DEFAULT_CONFIG } from './config';
+import { GithubBackupConfig, DEFAULT_CONFIG } from './config';
 
 export function renderTemplate(
     config: BasePluginConfig & Record<string, unknown>,
     data: PluginRenderData
 ): string {
-    const cfg = config as unknown as DatastoreSyncConfig;
+    const cfg = config as unknown as GithubBackupConfig;
     const enabled = cfg.enabled ?? DEFAULT_CONFIG.enabled;
-    const githubPath = cfg.githubPath || DEFAULT_CONFIG.githubPath;
+    const sourcePath = cfg.sourcePath || DEFAULT_CONFIG.sourcePath;
     const commitMessage = cfg.commitMessage || DEFAULT_CONFIG.commitMessage;
 
     let statusClass = 'pending';
@@ -24,15 +24,15 @@ export function renderTemplate(
 <details${data.justSaved ? ' open' : ''}>
     <summary>
         <span class="icon">📦</span>
-        Datastore Sync
+        GitHub Backup
         <span class="status ${statusClass}">${statusText}</span>
     </summary>
     <div class="section-content">
         <p style="color: #8b949e; margin-bottom: 1rem;">
-            Push all connector_data files to GitHub using the gitstore token.
+            Git add, commit and push a local directory to the GitHub vault repo.
         </p>
 
-        <form action="/plugin/datastore-sync" method="POST">
+        <form action="/plugin/github-backup" method="POST">
             <div style="margin-bottom: 1rem; padding: 0.75rem; background: #0a0a0a; border: 1px solid #333; border-radius: 4px;">
                 <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer;">
                     <input type="checkbox" name="enabled" ${enabled ? 'checked' : ''} />
@@ -41,18 +41,21 @@ export function renderTemplate(
             </div>
 
             <div>
-                <label for="ds-github-path">GitHub Path</label>
-                <input type="text" id="ds-github-path" name="githubPath"
-                    value="${githubPath}"
-                    placeholder="connector_data" />
-                <p class="help">Target folder path in the GitHub repo</p>
+                <label for="gb-source-path">Source Path</label>
+                <div style="display: flex; gap: 0.5rem;">
+                    <input type="text" id="gb-source-path" name="sourcePath"
+                        value="${sourcePath}"
+                        placeholder="./connector_data" style="flex: 1;" />
+                    <button type="button" onclick="pickFolder('gb-source-path', this)" class="btn secondary small-btn" title="Browse...">📂</button>
+                </div>
+                <p class="help">Local directory to back up (absolute or relative to project root)</p>
             </div>
 
             <div>
-                <label for="ds-msg">Commit Message</label>
-                <input type="text" id="ds-msg" name="commitMessage"
+                <label for="gb-msg">Commit Message</label>
+                <input type="text" id="gb-msg" name="commitMessage"
                     value="${commitMessage}"
-                    placeholder="sync: update datastore {date}" />
+                    placeholder="backup: {date}" />
                 <p class="help">Use <code>{date}</code> for current date</p>
             </div>
 
@@ -63,21 +66,21 @@ export function renderTemplate(
 
         <p style="color: #8b949e; font-size: 0.85rem;">
             <strong>Commands:</strong><br>
-            <code>npm run datastore-sync:push</code> - Push all files to GitHub
+            <code>npm run github-backup:push</code> - Push to GitHub
         </p>
     </div>
 </details>
 `;
 }
 
-export function parseFormData(body: Record<string, string>): DatastoreSyncConfig {
+export function parseFormData(body: Record<string, string>): GithubBackupConfig {
     return {
         enabled: body.enabled === 'on',
-        githubPath: body.githubPath || DEFAULT_CONFIG.githubPath,
+        sourcePath: body.sourcePath || DEFAULT_CONFIG.sourcePath,
         commitMessage: body.commitMessage || DEFAULT_CONFIG.commitMessage,
     };
 }
 
-export function getDefaultConfig(): DatastoreSyncConfig {
+export function getDefaultConfig(): GithubBackupConfig {
     return { ...DEFAULT_CONFIG };
 }
