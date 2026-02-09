@@ -15,6 +15,7 @@
     },
     "commands": {
         "server": "ts-node src/plugins/chrome-history/server.ts",
+        "process": "ts-node src/plugins/chrome-history/process.ts",
         "push": "ts-node src/plugins/chrome-history/push.ts"
     },
     "dependencies": {
