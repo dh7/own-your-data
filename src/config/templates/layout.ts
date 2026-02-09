@@ -782,7 +782,7 @@ export function renderLayout(sections: string[], options: LayoutOptions = {}): s
             const data = await res.json();
             
             if (data.success) {
-                statusEl.innerHTML = '✅ ' + data.message + '<br/><button onclick="restartConfig(this)" class="btn" style="margin-top: 0.5rem;">🔄 Restart to Apply</button>';
+                statusEl.innerHTML = '✅ ' + data.message + '<br/><button onclick="restartConfig(this)" class="btn" style="margin-top: 0.5rem;">🔄 Restart Config Server</button>';
                 statusEl.style.color = '#7ee787';
             } else {
                 statusEl.textContent = '❌ ' + (data.error || 'Pull failed');
