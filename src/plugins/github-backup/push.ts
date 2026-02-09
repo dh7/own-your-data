@@ -66,20 +66,30 @@ async function main() {
         process.exit(1);
     }
 
-    // Find the git repo that contains sourcePath
-    const repoRoot = findGitRoot(sourcePath);
+    // Find the git repo that CONTAINS sourcePath (look from parent up first,
+    // so we don't get tricked by a nested .git inside sourcePath itself).
+    const parentRepo = findGitRoot(path.dirname(sourcePath));
+    const selfRepo = fs.existsSync(path.join(sourcePath, '.git')) ? sourcePath : null;
 
     let workDir: string;
     let addPath: string;
 
-    if (repoRoot) {
-        // Source is inside an existing git repo — use it
-        workDir = repoRoot;
-        // Get the relative path from repo root to source
-        addPath = path.relative(repoRoot, sourcePath);
+    if (parentRepo) {
+        // sourcePath is inside a larger repo — use the parent repo
+        workDir = parentRepo;
+        addPath = path.relative(parentRepo, sourcePath);
         if (!addPath) addPath = '.';
-        console.log(`📁 Found git repo at: ${repoRoot}`);
-        console.log(`📎 Adding: ${addPath}\n`);
+        console.log(`📁 Using repo at: ${parentRepo}`);
+        console.log(`📎 Adding: ${addPath}/\n`);
+        // If sourcePath has a stale nested .git, warn
+        if (selfRepo) {
+            console.log(`⚠️  Ignoring nested .git inside ${sourcePath} (using parent repo)\n`);
+        }
+    } else if (selfRepo) {
+        // sourcePath IS a standalone repo — use it
+        workDir = sourcePath;
+        addPath = '.';
+        console.log(`📁 Using repo at: ${sourcePath}\n`);
     } else {
         // No git repo found — init one at the source path
         console.log('📦 No git repo found, initializing...');

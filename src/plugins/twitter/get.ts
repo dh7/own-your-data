@@ -256,11 +256,23 @@ async function main() {
 
     await fs.mkdir(rawDumpsDir, { recursive: true });
 
+    // Check for saved session (from twitter:login)
+    const statePath = paths.twitterSession;
+    let hasState = false;
+    try {
+        await fs.access(statePath);
+        hasState = true;
+        logger.log(`🔐 Using saved session from ${statePath}`);
+    } catch {
+        logger.log('⚠️ No session found. Run "npm run twitter:login" first for better results.');
+    }
+
     logger.log('🌐 Launching browser...');
     const browser = await chromium.launch({
         headless: true,
     });
     const context = await browser.newContext({
+        ...(hasState ? { storageState: statePath } : {}),
         userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         viewport: { width: 1280, height: 800 },
     });

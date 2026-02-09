@@ -257,6 +257,7 @@ export function getResolvedPaths(config: AppConfig) {
         // Auth files
         githubToken: path.join(authDir, 'github-token.json'),
         apifyToken: path.join(authDir, 'twitter-token.json'),
+        twitterSession: path.join(authDir, 'twitter-state.json'),
         whatsappSession: path.join(authDir, 'whatsapp-session.json'),
 
         // WhatsApp (legacy paths kept for compatibility)

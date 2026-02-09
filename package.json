@@ -15,6 +15,7 @@
     "whatsapp:get": "ts-node src/plugins/whatsapp/get.ts",
     "whatsapp:process": "ts-node src/plugins/whatsapp/process.ts",
     "whatsapp:push": "ts-node src/plugins/whatsapp/push.ts",
+    "twitter:login": "ts-node src/plugins/twitter/login.ts",
     "twitter:get": "ts-node src/plugins/twitter/get.ts",
     "twitter:process": "ts-node src/plugins/twitter/process.ts",
     "twitter:push": "ts-node src/plugins/twitter/push.ts",
