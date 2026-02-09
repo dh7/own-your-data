@@ -51,11 +51,12 @@ async function main() {
         process.exit(1);
     }
 
+    const isNewRepo = !fs.existsSync(path.join(datastorePath, '.git'));
+
     // Init git repo if needed
-    if (!fs.existsSync(path.join(datastorePath, '.git'))) {
+    if (isNewRepo) {
         console.log('📦 Initializing git repo...');
-        git('init', datastorePath);
-        git('branch -M main', datastorePath);
+        git('init -b main', datastorePath);
     }
 
     // Set remote with token-based URL
@@ -79,9 +80,14 @@ async function main() {
 
         console.log(`📄 Changed files:\n${status}\n`);
 
-        // Commit & push
+        // Commit
         git(`commit -m "${message}"`, datastorePath);
-        git('push -u origin main', datastorePath);
+
+        // Get current branch name
+        const branch = git('rev-parse --abbrev-ref HEAD', datastorePath);
+
+        // Push
+        git(`push -u origin ${branch}`, datastorePath);
 
         console.log('\n✅ Pushed successfully!');
     } catch (error: any) {
