@@ -31,6 +31,7 @@ import {
 import { PluginSchedule } from '../scheduler/config';
 import { useSingleFileAuthState } from '../shared/auth-utils';
 import { discoverPlugins, loadPluginModule, DiscoveredPlugin } from '../plugins';
+import { PluginManifest } from '../plugins/types';
 
 // Templates
 import { renderLayout } from './templates/layout';
@@ -243,8 +244,11 @@ async function checkNvidiaDocker(): Promise<boolean> {
   }
 }
 
-function describeSchedule(schedule: PluginSchedule): string {
+function describeSchedule(schedule: PluginSchedule, manifest?: PluginManifest): string {
   if (!schedule.enabled) {
+    if (manifest?.scheduler?.mode === 'manual') {
+      return '<span style="color:#8b949e">Manual</span>';
+    }
     return '<span style="color:#8b949e">Disabled</span>';
   }
 
@@ -455,7 +459,7 @@ app.get('/', async (req, res) => {
       ? (schedulerConfig.autoStartServer
         ? '<span style="color:#8b949e">Server managed</span>'
         : '<span style="color:#8b949e">Disabled</span>')
-      : describeSchedule(schedulerConfig);
+      : describeSchedule(schedulerConfig, discovered.manifest);
 
     // Show in scheduler UI if plugin has scheduled commands OR a server
     if (availableCommands.length > 0 || hasServer) {
