@@ -31,7 +31,7 @@ export function renderDomainSection(
     status: DomainStatus,
     tunnelPlugins: TunnelPluginInfo[],
     justSaved: boolean = false
-): string {
+): { card: string; modal: string } {
     // Determine the current state
     let stateNumber = 1; // cloudflared not installed
     if (status.cloudflaredInstalled && !status.credentialsConfigured) stateNumber = 2;
@@ -78,27 +78,38 @@ export function renderDomainSection(
         </p>
     `;
 
-    return `
-<details${justSaved ? ' open' : ''}>
-    <summary>
-        <span class="icon">🌍</span>
+    const cardBadge = stateNumber === 5
+        ? '<span class="sys-badge green">Online</span>'
+        : stateNumber >= 3
+            ? '<span class="sys-badge orange">Setup</span>'
+            : '<span class="sys-badge" style="background:#21262d;color:#8b949e;">Optional</span>';
+
+    const card = `
+    <button class="sys-card" onclick="openSysModal('sys-modal-domain')">
+        <span class="sys-icon">🌍</span>
         Your Domain
-        ${statusBadge}
-    </summary>
-    <div class="section-content">
-        <p style="color: #8b949e; margin-bottom: 1rem;">
-            <strong>Optional:</strong> Set up a permanent public URL to access your plugins from anywhere (Chrome extensions, mobile apps, etc).
-            This uses Cloudflare Tunnel for secure, encrypted access without exposing ports.
-        </p>
+        ${cardBadge}
+    </button>`;
 
-        ${pluginListHtml}
-
-        <hr style="margin: 1.5rem 0; border: none; border-top: 1px solid #30363d;" />
-
-        ${renderStateContent(status, stateNumber)}
+    const modal = `
+<div class="sys-modal-overlay" id="sys-modal-domain" onclick="if(event.target===this)closeSysModal(this.id)">
+    <div class="sys-modal" style="max-width:650px;">
+        <div class="sys-modal-header">
+            <span>🌍 Your Domain</span>
+            <button class="btn small-btn secondary" onclick="closeSysModal('sys-modal-domain')">✕</button>
+        </div>
+        <div class="sys-modal-body">
+            <p style="color: #8b949e; margin-bottom: 1rem; font-size:0.9em;">
+                <strong>Optional:</strong> Set up a permanent public URL using Cloudflare Tunnel.
+            </p>
+            ${pluginListHtml}
+            <hr style="margin: 1rem 0; border: none; border-top: 1px solid #30363d;" />
+            ${renderStateContent(status, stateNumber)}
+        </div>
     </div>
-</details>
-`;
+</div>`;
+
+    return { card, modal };
 }
 
 function renderStateContent(status: DomainStatus, stateNumber: number): string {

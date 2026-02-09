@@ -472,6 +472,83 @@ export function renderLayout(sections: string[], options: LayoutOptions = {}): s
             font-size: 0.8rem;
         }
 
+        /* System card grid */
+        .sys-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+            gap: 0.75rem;
+            margin-bottom: 0.5rem;
+        }
+        .sys-card {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 1.1rem 0.75rem;
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: border-color 0.15s, background 0.15s;
+            text-align: center;
+            font-family: inherit;
+            color: #c9d1d9;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+        .sys-card:hover { border-color: #58a6ff; background: #1c2333; }
+        .sys-card .sys-icon { font-size: 1.4rem; }
+        .sys-card .sys-badge {
+            font-size: 0.7rem;
+            font-weight: 600;
+            padding: 0.15rem 0.45rem;
+            border-radius: 999px;
+            margin-top: 0.15rem;
+        }
+        .sys-badge.green { background: #1a3a1a; color: #7ee787; }
+        .sys-badge.orange { background: #3a2a0a; color: #f0a030; }
+        .sys-badge.red { background: #3a1a1a; color: #ff7b72; }
+        @media (max-width: 500px) {
+            .sys-grid { grid-template-columns: 1fr; }
+        }
+
+        /* System modal overlay */
+        .sys-modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 10000;
+            background: rgba(0,0,0,0.7);
+            justify-content: center;
+            align-items: center;
+        }
+        .sys-modal-overlay.active { display: flex; }
+        .sys-modal {
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            width: 90vw;
+            max-width: 600px;
+            max-height: 80vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .sys-modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid #30363d;
+            color: #c9d1d9;
+            font-weight: 600;
+        }
+        .sys-modal-body {
+            overflow-y: auto;
+            padding: 1.25rem;
+            flex: 1;
+            min-height: 0;
+        }
+
         /* Folder browser modal */
         .folder-browser-overlay {
             display: none;
@@ -1118,6 +1195,14 @@ export function renderLayout(sections: string[], options: LayoutOptions = {}): s
             btn.textContent = '✅ Copied!';
             setTimeout(() => btn.textContent = originalText, 2000);
         });
+    }
+
+    // ---- System Modals ----
+    function openSysModal(id) {
+        document.getElementById(id).classList.add('active');
+    }
+    function closeSysModal(id) {
+        document.getElementById(id).classList.remove('active');
     }
 
     // ---- Folder Browser ----

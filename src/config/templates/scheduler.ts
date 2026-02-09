@@ -133,75 +133,79 @@ function renderServiceRows(services: SchedulerServiceStatus[], emptyLabel: strin
 export function renderSchedulerSection(
     data: SchedulerSectionData,
     justSaved: boolean = false
-): string {
-    const statusHtml = data.daemonRunning
-        ? '<span class="status connected">🔥 Running</span>'
-        : '<span class="status pending">⏸ Stopped</span>';
-
+): { card: string; modal: string } {
     const systemServiceIds = ['config-server', 'daemon', 'tunnel'];
     const systemServices = data.services.filter(service => systemServiceIds.includes(service.id));
     const pluginServices = data.services.filter(service => !systemServiceIds.includes(service.id));
     const systemServiceRows = renderServiceRows(systemServices, 'No system services detected.');
     const pluginServiceRows = renderServiceRows(pluginServices, 'No plugin services detected.');
 
-    return `
-<details${justSaved ? ' open' : ''}>
-    <summary>
-        <span class="icon">🗓</span>
+    const badge = data.daemonRunning
+        ? '<span class="sys-badge green">Running</span>'
+        : '<span class="sys-badge orange">Stopped</span>';
+
+    const card = `
+    <button class="sys-card" onclick="openSysModal('sys-modal-services')">
+        <span class="sys-icon">🗓</span>
         Services
-        ${statusHtml}
-    </summary>
-    <div class="section-content">
-        <h3 style="margin-bottom:0.75rem; color:#79c0ff;">🤖 Daemon Controls</h3>
-        <p style="color:#8b949e; font-size:0.9em; margin-bottom:1rem;">
-            Runs <code>npm run scheduler</code> and executes plugin jobs based on the rules below.
-        </p>
-        <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
-            ${data.daemonRunning ? `
-                <button type="button" class="btn secondary" onclick="restartDaemon(this)">🔄 Restart Scheduler</button>
-                <button type="button" class="btn danger" onclick="stopDaemon(this)">⏹️ Stop Scheduler</button>
-            ` : `
-                <button type="button" class="btn" onclick="startDaemon(this)">▶️ Start Scheduler</button>
-            `}
-            <button type="button" class="btn secondary" onclick="refreshServicesSection()">🔄 Refresh Status</button>
+        ${badge}
+    </button>`;
+
+    const modal = `
+<div class="sys-modal-overlay" id="sys-modal-services" onclick="if(event.target===this)closeSysModal(this.id)">
+    <div class="sys-modal" style="max-width:750px;">
+        <div class="sys-modal-header">
+            <span>🗓 Services</span>
+            <button class="btn small-btn secondary" onclick="closeSysModal('sys-modal-services')">✕</button>
         </div>
-        <p id="scheduler-daemon-status" style="margin-top:0.5rem; font-size:0.85em;"></p>
+        <div class="sys-modal-body">
+            <h4 style="margin-bottom:0.5rem; color:#79c0ff;">🤖 Daemon Controls</h4>
+            <p style="color:#8b949e; font-size:0.85em; margin-bottom:0.75rem;">
+                Runs <code>npm run scheduler</code> and executes plugin jobs.
+            </p>
+            <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+                ${data.daemonRunning ? `
+                    <button type="button" class="btn secondary small-btn" onclick="restartDaemon(this)">🔄 Restart</button>
+                    <button type="button" class="btn danger small-btn" onclick="stopDaemon(this)">⏹️ Stop</button>
+                ` : `
+                    <button type="button" class="btn small-btn" onclick="startDaemon(this)">▶️ Start</button>
+                `}
+                <button type="button" class="btn secondary small-btn" onclick="refreshServicesSection()">🔄 Refresh</button>
+            </div>
+            <p id="scheduler-daemon-status" style="margin-top:0.5rem; font-size:0.85em;"></p>
 
-        <hr style="margin: 1.5rem 0; border: none; border-top: 1px solid #30363d;" />
+            <hr style="margin: 1rem 0; border: none; border-top: 1px solid #30363d;" />
 
-        <h3 style="margin-bottom: 0.75rem; color: #58a6ff;">🧩 System Services</h3>
-        <table style="width:100%; border-collapse:collapse; text-align:left;">
-            <thead>
-                <tr style="border-bottom:1px solid #30363d; color:#8b949e;">
-                    <th style="padding:0.65rem;">Service</th>
-                    <th style="padding:0.65rem;">Status</th>
-                    <th style="padding:0.65rem;">Details</th>
-                    <th style="padding:0.65rem;">Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                ${systemServiceRows}
-            </tbody>
-        </table>
+            <h4 style="margin-bottom: 0.5rem; color: #58a6ff;">🧩 System Services</h4>
+            <table style="width:100%; border-collapse:collapse; text-align:left; font-size:0.9em;">
+                <thead>
+                    <tr style="border-bottom:1px solid #30363d; color:#8b949e;">
+                        <th style="padding:0.5rem;">Service</th>
+                        <th style="padding:0.5rem;">Status</th>
+                        <th style="padding:0.5rem;">Details</th>
+                        <th style="padding:0.5rem;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>${systemServiceRows}</tbody>
+            </table>
 
-        <h3 style="margin: 1.25rem 0 0.75rem; color: #58a6ff;">🔌 Plugin Services</h3>
-        <table style="width:100%; border-collapse:collapse; text-align:left;">
-            <thead>
-                <tr style="border-bottom:1px solid #30363d; color:#8b949e;">
-                    <th style="padding:0.65rem;">Service</th>
-                    <th style="padding:0.65rem;">Status</th>
-                    <th style="padding:0.65rem;">Details</th>
-                    <th style="padding:0.65rem;">Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                ${pluginServiceRows}
-            </tbody>
-        </table>
-
+            <h4 style="margin: 1rem 0 0.5rem; color: #58a6ff;">🔌 Plugin Services</h4>
+            <table style="width:100%; border-collapse:collapse; text-align:left; font-size:0.9em;">
+                <thead>
+                    <tr style="border-bottom:1px solid #30363d; color:#8b949e;">
+                        <th style="padding:0.5rem;">Service</th>
+                        <th style="padding:0.5rem;">Status</th>
+                        <th style="padding:0.5rem;">Details</th>
+                        <th style="padding:0.5rem;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>${pluginServiceRows}</tbody>
+            </table>
+        </div>
     </div>
-</details>
-`;
+</div>`;
+
+    return { card, modal };
 }
 
 /**

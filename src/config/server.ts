@@ -595,42 +595,51 @@ app.get('/', async (req, res) => {
     });
   }
 
-  const sections: string[] = [
-    renderSchedulerSection({
-      daemonRunning,
-      services: schedulerServices,
-      plugins: pluginScheduleRows,
-    }, savedSection === 'services'),
-    renderSystemSection(config, {
-      playwrightInstalled: playwright.installed,
-      browsersInstalled: playwright.browsers,
-      daemonRunning,
-      syncthingInstalled,
+  const services = renderSchedulerSection({
+    daemonRunning,
+    services: schedulerServices,
+    plugins: pluginScheduleRows,
+  }, savedSection === 'services');
+
+  const system = renderSystemSection(config, {
+    playwrightInstalled: playwright.installed,
+    browsersInstalled: playwright.browsers,
+    daemonRunning,
+    syncthingInstalled,
+    cloudflaredInstalled: tunnelStatus.cloudflaredInstalled,
+    tunnelRunning: tunnelStatus.tunnelRunning,
+    tunnelUrl: tunnelStatus.tunnelUrl,
+    tunnelRoutes: tunnelPlugins,
+    dockerInstalled,
+    nvidiaDockerInstalled,
+    updateAvailable: gitStatus.updateAvailable,
+    currentCommit: gitStatus.currentCommit,
+    remoteCommit: gitStatus.remoteCommit,
+    commitsBehind: gitStatus.commitsBehind,
+  }, savedSection === 'system' || savedSection === 'storage');
+
+  const domain = renderDomainSection(
+    {
       cloudflaredInstalled: tunnelStatus.cloudflaredInstalled,
+      credentialsConfigured: tunnelStatus.credentialsConfigured,
+      tunnelConfigured: tunnelStatus.tunnelConfigured,
       tunnelRunning: tunnelStatus.tunnelRunning,
       tunnelUrl: tunnelStatus.tunnelUrl,
-      tunnelRoutes: tunnelPlugins,
-      dockerInstalled,
-      nvidiaDockerInstalled,
-      updateAvailable: gitStatus.updateAvailable,
-      currentCommit: gitStatus.currentCommit,
-      remoteCommit: gitStatus.remoteCommit,
-      commitsBehind: gitStatus.commitsBehind,
-    }, savedSection === 'system' || savedSection === 'storage'),
-    renderDomainSection(
-      {
-        cloudflaredInstalled: tunnelStatus.cloudflaredInstalled,
-        credentialsConfigured: tunnelStatus.credentialsConfigured,
-        tunnelConfigured: tunnelStatus.tunnelConfigured,
-        tunnelRunning: tunnelStatus.tunnelRunning,
-        tunnelUrl: tunnelStatus.tunnelUrl,
-        tunnelConfig: tunnelStatus.tunnelConfig,
-      },
-      tunnelPlugins,
-      savedSection === 'domain'
-    ),
-    renderFileBrowserSection(),
-    renderGitHubSection(githubConfig, savedSection === 'github'),
+      tunnelConfig: tunnelStatus.tunnelConfig,
+    },
+    tunnelPlugins,
+    savedSection === 'domain'
+  );
+
+  const files = renderFileBrowserSection();
+  const github = renderGitHubSection(githubConfig, savedSection === 'github');
+
+  const topGrid = `<div class="sys-grid">${services.card}${system.cards}${domain.card}${files.card}${github.card}</div>`;
+  const allModals = services.modal + system.modals + domain.modal + files.modal + github.modal;
+
+  const sections: string[] = [
+    topGrid,
+    allModals,
     renderPluginsHub(pluginSummaries),
   ];
 

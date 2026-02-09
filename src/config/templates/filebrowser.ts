@@ -9,46 +9,54 @@ export interface FileInfo {
     modified: string;
 }
 
-export function renderFileBrowserSection(): string {
-    return `
-<details>
-    <summary>
-        <span class="icon">📂</span>
+export function renderFileBrowserSection(): { card: string; modal: string } {
+    const card = `
+    <button class="sys-card" onclick="openSysModal('sys-modal-files')">
+        <span class="sys-icon">📂</span>
         Server Files
-        <span class="status">Browse & Editor</span>
-    </summary>
-    <div class="section-content">
-        <div id="file-browser">
-            <div class="file-browser-header">
-                <div class="path-bar">
-                    <span class="path-label">📁</span>
-                    <input type="text" id="current-path" value="." readonly />
-                    <button onclick="navigateTo('.')" title="Home">🏠</button>
-                    <button onclick="navigateUp()" title="Go up">⬆️</button>
-                    <button onclick="refreshFiles()" title="Refresh">🔄</button>
+        <span class="sys-badge" style="background:#21262d;color:#8b949e;">Browse</span>
+    </button>`;
+
+    const modal = `
+<div class="sys-modal-overlay" id="sys-modal-files" onclick="if(event.target===this)closeSysModal(this.id)">
+    <div class="sys-modal" style="max-width:800px; max-height:85vh;">
+        <div class="sys-modal-header">
+            <span>📂 Server Files</span>
+            <button class="btn small-btn secondary" onclick="closeSysModal('sys-modal-files')">✕</button>
+        </div>
+        <div class="sys-modal-body" style="padding:0;">
+            <div id="file-browser" style="padding:1rem;">
+                <div class="file-browser-header">
+                    <div class="path-bar">
+                        <span class="path-label">📁</span>
+                        <input type="text" id="current-path" value="." readonly />
+                        <button onclick="navigateTo('.')" title="Home">🏠</button>
+                        <button onclick="navigateUp()" title="Go up">⬆️</button>
+                        <button onclick="refreshFiles()" title="Refresh">🔄</button>
+                    </div>
                 </div>
-            </div>
-            
-            <div class="file-list" id="file-list">
-                <div class="loading">Loading...</div>
-            </div>
-            
-            <div class="upload-section">
-                <h4>📤 Upload Files</h4>
-                <div id="dropzone" class="dropzone">
-                    <span class="dropzone-icon">📁</span>
-                    <p>Drag & drop files here</p>
-                    <p class="dropzone-or">or</p>
+                
+                <div class="file-list" id="file-list">
+                    <div class="loading">Loading...</div>
                 </div>
-                <div class="upload-btn-container">
-                    <input type="file" id="file-input" multiple />
+                
+                <div class="upload-section">
+                    <h4>📤 Upload Files</h4>
+                    <div id="dropzone" class="dropzone">
+                        <span class="dropzone-icon">📁</span>
+                        <p>Drag & drop files here</p>
+                        <p class="dropzone-or">or</p>
+                    </div>
+                    <div class="upload-btn-container">
+                        <input type="file" id="file-input" multiple />
+                    </div>
+                    <div id="upload-queue" class="upload-queue"></div>
+                    <p id="upload-status" class="help"></p>
                 </div>
-                <div id="upload-queue" class="upload-queue"></div>
-                <p id="upload-status" class="help"></p>
             </div>
         </div>
     </div>
-</details>
+</div>
 
 <!-- EDITOR MODAL -->
 <div id="editor-modal" class="modal">
@@ -776,4 +784,6 @@ export function renderFileBrowserSection(): string {
 })();
 </script>
 `;
+
+    return { card, modal };
 }

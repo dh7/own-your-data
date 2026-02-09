@@ -4,70 +4,79 @@
 
 import { GitHubConfig } from '../config';
 
-export function renderGitHubSection(config: GitHubConfig | null, collapsed: boolean = true): string {
-    const statusClass = config ? 'connected' : 'disconnected';
-    const statusText = config ? '✅ Configured' : '❌ Not configured';
+export function renderGitHubSection(config: GitHubConfig | null, collapsed: boolean = true): { card: string; modal: string } {
+    const badge = config
+        ? '<span class="sys-badge green">Configured</span>'
+        : '<span class="sys-badge red">Not configured</span>';
 
-    return `
-<details>
-    <summary>
-        <span class="icon">📦</span>
-        GitStore (GitHub)
-        <span class="status ${statusClass}">${statusText}</span>
-    </summary>
-    <div class="section-content">
-        <p style="margin-bottom: 1rem;">
-            <a href="https://github.com/settings/tokens?type=beta" target="_blank" style="color: #667eea;">
-                🔑 Create/Edit GitHub Token →
-            </a>
-        </p>
-        
-        ${config ? `<div class="success">Connected to: <strong>${config.owner}/${config.repo}</strong></div>` : ''}
-        
-        ${config ? `
-            <div style="margin-bottom: 1rem;">
-                <button type="button" onclick="testGitHub()" id="test-btn" style="background: #17a2b8;">
-                    🔗 Test Connection
-                </button>
-                <div id="test-result" style="margin-top: 0.5rem;"></div>
-            </div>
-        ` : ''}
-        
-        <form action="/github" method="POST">
-            <div>
-                <label for="token">Personal Access Token</label>
-                <div class="input-group">
-                    <div class="password-container">
-                        <input type="password" id="token" name="token" 
-                            value="${config?.token || ''}"
-                            placeholder="github_pat_xxxxxxxxxxxx" required />
-                        <button type="button" class="toggle-password" onclick="togglePassword('token')">
-                            👁
+    const card = `
+    <button class="sys-card" onclick="openSysModal('sys-modal-gitstore')">
+        <span class="sys-icon">📦</span>
+        GitStore
+        ${badge}
+    </button>`;
+
+    const modal = `
+<div class="sys-modal-overlay" id="sys-modal-gitstore" onclick="if(event.target===this)closeSysModal(this.id)">
+    <div class="sys-modal">
+        <div class="sys-modal-header">
+            <span>📦 GitStore (GitHub)</span>
+            <button class="btn small-btn secondary" onclick="closeSysModal('sys-modal-gitstore')">✕</button>
+        </div>
+        <div class="sys-modal-body">
+            <p style="margin-bottom: 1rem;">
+                <a href="https://github.com/settings/tokens?type=beta" target="_blank" style="color: #667eea;">
+                    🔑 Create/Edit GitHub Token →
+                </a>
+            </p>
+            
+            ${config ? `<div class="success">Connected to: <strong>${config.owner}/${config.repo}</strong></div>` : ''}
+            
+            ${config ? `
+                <div style="margin-bottom: 1rem;">
+                    <button type="button" onclick="testGitHub()" id="test-btn" style="background: #17a2b8;">
+                        🔗 Test Connection
+                    </button>
+                    <div id="test-result" style="margin-top: 0.5rem;"></div>
+                </div>
+            ` : ''}
+            
+            <form action="/github" method="POST">
+                <div>
+                    <label for="token">Personal Access Token</label>
+                    <div class="input-group">
+                        <div class="password-container">
+                            <input type="password" id="token" name="token" 
+                                value="${config?.token || ''}"
+                                placeholder="github_pat_xxxxxxxxxxxx" required />
+                            <button type="button" class="toggle-password" onclick="togglePassword('token')">
+                                👁
+                            </button>
+                        </div>
+                        <button type="button" class="small-btn" onclick="detectUser()" id="detect-btn">
+                            🔍 Detect
                         </button>
                     </div>
-                    <button type="button" class="small-btn" onclick="detectUser()" id="detect-btn">
-                        🔍 Detect
-                    </button>
+                    <p class="help">After entering token, click Detect to auto-fill owner and load repos</p>
                 </div>
-                <p class="help">After entering token, click Detect to auto-fill owner and load repos</p>
-            </div>
-            <div>
-                <label for="owner">Repository Owner</label>
-                <input type="text" id="owner" name="owner" 
-                    value="${config?.owner || ''}"
-                    placeholder="(auto-detected from token)" required readonly />
-            </div>
-            <div>
-                <label for="repo">Repository</label>
-                <select id="repo" name="repo" required>
-                    <option value="">-- Click "Detect" above first --</option>
-                    ${config?.repo ? `<option value="${config.repo}" selected>${config.repo}</option>` : ''}
-                </select>
-            </div>
-            <button type="submit">💾 Save GitHub Config</button>
-        </form>
+                <div>
+                    <label for="owner">Repository Owner</label>
+                    <input type="text" id="owner" name="owner" 
+                        value="${config?.owner || ''}"
+                        placeholder="(auto-detected from token)" required readonly />
+                </div>
+                <div>
+                    <label for="repo">Repository</label>
+                    <select id="repo" name="repo" required>
+                        <option value="">-- Click "Detect" above first --</option>
+                        ${config?.repo ? `<option value="${config.repo}" selected>${config.repo}</option>` : ''}
+                    </select>
+                </div>
+                <button type="submit">💾 Save GitHub Config</button>
+            </form>
+        </div>
     </div>
-</details>
+</div>
 
 <script>
 function togglePassword(id) {
@@ -168,4 +177,6 @@ async function testGitHub() {
 }
 </script>
 `;
+
+    return { card, modal };
 }
