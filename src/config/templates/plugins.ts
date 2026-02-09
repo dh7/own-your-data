@@ -20,7 +20,7 @@ export function renderPluginsHub(summaries: PluginSummary[]): string {
             <td style="padding:0.65rem;">
                 <span class="status ${summary.statusClass}" style="margin-left:0;">${summary.statusText}</span>
             </td>
-            <td style="padding:0.65rem;">${summary.scheduleText}</td>
+            <td style="padding:0.65rem;"><a href="#" onclick="event.preventDefault(); openSchedulerPanel('${summary.id}')" style="color:#58a6ff; text-decoration:none; cursor:pointer;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">${summary.scheduleText}</a></td>
             <td style="padding:0.65rem; text-align:right;">
                 <button type="button" class="btn small-btn" onclick="openPluginPanel('${summary.id}')">⚙️ Config</button>
             </td>

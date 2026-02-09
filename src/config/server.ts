@@ -36,7 +36,7 @@ import { PluginManifest } from '../plugins/types';
 // Templates
 import { renderLayout } from './templates/layout';
 import { renderSystemSection, TunnelRouteInfo } from './templates/system';
-import { renderSchedulerSection, SchedulerServiceStatus, SchedulerPluginEditor } from './templates/scheduler';
+import { renderSchedulerSection, renderSchedulerPanel, SchedulerServiceStatus, SchedulerPluginEditor } from './templates/scheduler';
 import { renderPluginsHub, wrapPluginPanel, PluginSummary } from './templates/plugins';
 import { renderGitHubSection } from './templates/github';
 import { renderFileBrowserSection } from './templates/filebrowser';
@@ -636,8 +636,11 @@ app.get('/', async (req, res) => {
 
   const initialPluginPanel = pluginSummaries.some(p => p.id === savedSection) ? savedSection : undefined;
 
+  // Generate scheduler popup panels for each plugin
+  const schedulerPanels = pluginScheduleRows.map(p => renderSchedulerPanel(p));
+
   res.send(renderLayout(sections, {
-    modals: pluginPanels,
+    modals: [...pluginPanels, ...schedulerPanels],
     initialPluginPanel,
   }));
 });

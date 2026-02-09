@@ -1095,6 +1095,25 @@ export function renderLayout(sections: string[], options: LayoutOptions = {}): s
         }
     }
 
+    function openSchedulerPanel(id) {
+        const panel = document.getElementById('scheduler-panel-' + id);
+        if (!panel) return;
+        closeAllPluginPanels();
+        panel.classList.add('active');
+        panel.setAttribute('aria-hidden', 'false');
+        document.body.classList.add('modal-open');
+    }
+
+    function closeSchedulerPanel(id) {
+        const panel = document.getElementById('scheduler-panel-' + id);
+        if (!panel) return;
+        panel.classList.remove('active');
+        panel.setAttribute('aria-hidden', 'true');
+        if (!document.querySelector('.plugin-panel.active')) {
+            document.body.classList.remove('modal-open');
+        }
+    }
+
     document.addEventListener('keyup', (event) => {
         if (event.key === 'Escape') {
             closeLogViewer();

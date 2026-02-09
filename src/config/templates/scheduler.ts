@@ -144,99 +144,6 @@ export function renderSchedulerSection(
     const systemServiceRows = renderServiceRows(systemServices, 'No system services detected.');
     const pluginServiceRows = renderServiceRows(pluginServices, 'No plugin services detected.');
 
-    const pluginRows = data.plugins.length > 0
-        ? data.plugins.map(plugin => {
-            const fixedTimesValue = plugin.fixedTimes.join(', ');
-            return `
-            <details style="margin-bottom:0.75rem;" ${justSaved ? '' : ''}>
-                <summary>
-                    <span class="icon">${plugin.icon}</span>
-                    ${plugin.name}
-                    <span style="margin-left:auto; color:${plugin.enabled ? '#7ee787' : '#8b949e'}; font-size:0.85em;">${plugin.scheduleText}</span>
-                </summary>
-                <div class="section-content" style="background:#0d1117;">
-                    <form action="/scheduler/plugin/${plugin.id}" method="POST" style="gap:0.85rem;">
-                        <div style="display:flex; justify-content:space-between; align-items:center; gap:0.75rem; flex-wrap:wrap;">
-                            <label style="display:flex; align-items:center; gap:0.5rem;">
-                                <input type="checkbox" name="enabled" ${plugin.enabled ? 'checked' : ''} />
-                                Enable this plugin in scheduler
-                            </label>
-                            <button type="button" class="btn secondary small-btn" onclick="openPluginPanel('${plugin.id}')">Open Plugin Config</button>
-                        </div>
-
-                        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap:0.75rem;">
-                            <label>
-                                <span style="display:block; margin-bottom:0.2rem; color:#8b949e;">Cadence</span>
-                                <select name="cadence" class="scheduler-cadence" data-plugin-id="${plugin.id}">
-                                    <option value="interval" ${plugin.cadence === 'interval' ? 'selected' : ''}>Interval + jitter</option>
-                                    <option value="fixed" ${plugin.cadence === 'fixed' ? 'selected' : ''}>Fixed times</option>
-                                </select>
-                            </label>
-                        </div>
-
-                        <div id="interval-settings-${plugin.id}" style="display:${plugin.cadence === 'interval' ? 'grid' : 'none'}; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap:0.75rem;">
-                            <label>
-                                <span style="display:block; margin-bottom:0.2rem; color:#8b949e;">Start hour</span>
-                                <input type="number" min="0" max="23" name="startHour" value="${plugin.startHour}" />
-                            </label>
-                            <label>
-                                <span style="display:block; margin-bottom:0.2rem; color:#8b949e;">Stop hour</span>
-                                <input type="number" min="1" max="24" name="endHour" value="${plugin.endHour}" />
-                            </label>
-                            <label>
-                                <span style="display:block; margin-bottom:0.2rem; color:#8b949e;">Interval (hours)</span>
-                                <input type="number" min="1" max="168" name="intervalHours" value="${plugin.intervalHours}" />
-                            </label>
-                            <label>
-                                <span style="display:block; margin-bottom:0.2rem; color:#8b949e;">Jitter (minutes)</span>
-                                <input type="number" min="0" max="180" name="jitterMinutes" value="${plugin.jitterMinutes}" />
-                            </label>
-                        </div>
-
-                        <div id="fixed-settings-${plugin.id}" style="display:${plugin.cadence === 'fixed' ? 'block' : 'none'};">
-                            <label>
-                                <span style="display:block; margin-bottom:0.2rem; color:#8b949e;">Fixed run times</span>
-                                <input type="text" name="fixedTimes" value="${fixedTimesValue}" placeholder="07:00, 12:30, 20:15" />
-                            </label>
-                            <p class="help">Comma-separated 24h times. Example: <code>07:00, 19:30</code>.</p>
-                        </div>
-
-                        ${plugin.availableCommands.length > 0 ? `
-                            <div style="padding:0.6rem; border:1px solid #30363d; border-radius:6px;">
-                                <div style="margin-bottom:0.4rem; color:#8b949e; font-size:0.85em;">Commands per run (order is always Get → Process → Push)</div>
-                                <div style="display:flex; gap:0.85rem; flex-wrap:wrap;">
-                                    ${renderCommandToggles(plugin)}
-                                </div>
-                            </div>
-                        ` : `
-                            <div style="padding:0.6rem; border:1px solid #30363d; border-radius:6px; color:#8b949e; font-size:0.85em;">
-                                This plugin is server-managed. No scheduled command chain is required.
-                            </div>
-                        `}
-
-                        ${renderManualTriggerButtons(plugin)}
-
-                        ${plugin.hasServer ? `
-                            <div style="display:flex; flex-direction:column; gap:0.5rem; margin-top:0.35rem;">
-                                <label style="display:flex; align-items:center; gap:0.5rem;">
-                                    <input type="checkbox" name="autoStartServer" ${plugin.autoStartServer ? 'checked' : ''} />
-                                    Auto-start this plugin's server with the scheduler daemon
-                                </label>
-                                <label style="display:flex; align-items:center; gap:0.5rem;">
-                                    <input type="checkbox" name="autoRestartServer" ${plugin.autoRestartServer ? 'checked' : ''} />
-                                    Auto-restart server if it crashes
-                                </label>
-                            </div>
-                        ` : ''}
-
-                        <button type="submit">💾 Save Scheduler Rules</button>
-                    </form>
-                </div>
-            </details>
-        `;
-        }).join('')
-        : `<div style="padding: 0.75rem; color:#8b949e;">No plugins discovered.</div>`;
-
     return `
 <details${justSaved ? ' open' : ''}>
     <summary>
@@ -292,11 +199,104 @@ export function renderSchedulerSection(
             </tbody>
         </table>
 
-        <hr style="margin: 1.5rem 0; border: none; border-top: 1px solid #30363d;" />
-
-        <h3 style="margin-bottom: 0.75rem; color: #58a6ff;">📋 Plugin Schedules</h3>
-        ${pluginRows}
     </div>
 </details>
+`;
+}
+
+/**
+ * Render a scheduler settings popup panel for a single plugin.
+ * Reuses the same form as the old scheduler section, without the "Open Plugin Config" button.
+ */
+export function renderSchedulerPanel(plugin: SchedulerPluginEditor): string {
+    const fixedTimesValue = plugin.fixedTimes.join(', ');
+
+    return `
+<div class="plugin-panel" id="scheduler-panel-${plugin.id}" aria-hidden="true">
+    <div class="plugin-panel__overlay" onclick="closeSchedulerPanel('${plugin.id}')"></div>
+    <div class="plugin-panel__body">
+        <div class="plugin-panel__header">
+            <h3>${plugin.icon} ${plugin.name} — Schedule</h3>
+            <button type="button" class="close-btn small-btn" onclick="closeSchedulerPanel('${plugin.id}')">✕</button>
+        </div>
+        <div class="plugin-panel__content">
+            <form action="/scheduler/plugin/${plugin.id}" method="POST" style="gap:0.85rem;">
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:0.75rem; flex-wrap:wrap;">
+                    <label style="display:flex; align-items:center; gap:0.5rem;">
+                        <input type="checkbox" name="enabled" ${plugin.enabled ? 'checked' : ''} />
+                        Enable this plugin in scheduler
+                    </label>
+                </div>
+
+                <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap:0.75rem;">
+                    <label>
+                        <span style="display:block; margin-bottom:0.2rem; color:#8b949e;">Cadence</span>
+                        <select name="cadence" class="scheduler-cadence" data-plugin-id="${plugin.id}">
+                            <option value="interval" ${plugin.cadence === 'interval' ? 'selected' : ''}>Interval + jitter</option>
+                            <option value="fixed" ${plugin.cadence === 'fixed' ? 'selected' : ''}>Fixed times</option>
+                        </select>
+                    </label>
+                </div>
+
+                <div id="interval-settings-${plugin.id}" style="display:${plugin.cadence === 'interval' ? 'grid' : 'none'}; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap:0.75rem;">
+                    <label>
+                        <span style="display:block; margin-bottom:0.2rem; color:#8b949e;">Start hour</span>
+                        <input type="number" min="0" max="23" name="startHour" value="${plugin.startHour}" />
+                    </label>
+                    <label>
+                        <span style="display:block; margin-bottom:0.2rem; color:#8b949e;">Stop hour</span>
+                        <input type="number" min="1" max="24" name="endHour" value="${plugin.endHour}" />
+                    </label>
+                    <label>
+                        <span style="display:block; margin-bottom:0.2rem; color:#8b949e;">Interval (hours)</span>
+                        <input type="number" min="1" max="168" name="intervalHours" value="${plugin.intervalHours}" />
+                    </label>
+                    <label>
+                        <span style="display:block; margin-bottom:0.2rem; color:#8b949e;">Jitter (minutes)</span>
+                        <input type="number" min="0" max="180" name="jitterMinutes" value="${plugin.jitterMinutes}" />
+                    </label>
+                </div>
+
+                <div id="fixed-settings-${plugin.id}" style="display:${plugin.cadence === 'fixed' ? 'block' : 'none'};">
+                    <label>
+                        <span style="display:block; margin-bottom:0.2rem; color:#8b949e;">Fixed run times</span>
+                        <input type="text" name="fixedTimes" value="${fixedTimesValue}" placeholder="07:00, 12:30, 20:15" />
+                    </label>
+                    <p class="help">Comma-separated 24h times. Example: <code>07:00, 19:30</code>.</p>
+                </div>
+
+                ${plugin.availableCommands.length > 0 ? `
+                    <div style="padding:0.6rem; border:1px solid #30363d; border-radius:6px;">
+                        <div style="margin-bottom:0.4rem; color:#8b949e; font-size:0.85em;">Commands per run (order is always Get → Process → Push)</div>
+                        <div style="display:flex; gap:0.85rem; flex-wrap:wrap;">
+                            ${renderCommandToggles(plugin)}
+                        </div>
+                    </div>
+                ` : `
+                    <div style="padding:0.6rem; border:1px solid #30363d; border-radius:6px; color:#8b949e; font-size:0.85em;">
+                        This plugin is server-managed. No scheduled command chain is required.
+                    </div>
+                `}
+
+                ${renderManualTriggerButtons(plugin)}
+
+                ${plugin.hasServer ? `
+                    <div style="display:flex; flex-direction:column; gap:0.5rem; margin-top:0.35rem;">
+                        <label style="display:flex; align-items:center; gap:0.5rem;">
+                            <input type="checkbox" name="autoStartServer" ${plugin.autoStartServer ? 'checked' : ''} />
+                            Auto-start this plugin's server with the scheduler daemon
+                        </label>
+                        <label style="display:flex; align-items:center; gap:0.5rem;">
+                            <input type="checkbox" name="autoRestartServer" ${plugin.autoRestartServer ? 'checked' : ''} />
+                            Auto-restart server if it crashes
+                        </label>
+                    </div>
+                ` : ''}
+
+                <button type="submit">💾 Save Scheduler Rules</button>
+            </form>
+        </div>
+    </div>
+</div>
 `;
 }
