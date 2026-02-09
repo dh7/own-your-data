@@ -24,7 +24,7 @@ export interface TwitterPluginConfig extends BasePluginConfig {
 export const DEFAULT_CONFIG: TwitterPluginConfig = {
     enabled: true,
     accounts: [],
-    tweetsPerAccount: 100,
+    tweetsPerAccount: 10,
     githubPath: 'twitter',
 };
 

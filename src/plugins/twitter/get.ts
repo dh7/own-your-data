@@ -2,10 +2,13 @@
  * Twitter GET script - Fetch tweets using Playwright browser automation
  * Run: npm run twitter:get
  *
- * Uses Playwright to scrape tweets from configured Twitter accounts.
- * Saves raw JSON to raw-dumps/twitter/{username}.json
+ * Designed to mimic natural human browsing patterns:
+ * - Only visits a random subset of accounts per run
+ * - Variable tweet counts, scroll speeds, and delays
+ * - Browses home feed first like a real user
+ * - Best used with a scheduler (every 30min ± jitter)
  *
- * NOTE: This script ONLY fetches raw data. Processing is handled separately.
+ * Saves raw JSON to raw-dumps/twitter/{username}.json
  */
 
 import { chromium, Page } from 'playwright';
@@ -29,9 +32,55 @@ interface Tweet {
     likeCount: number;
 }
 
+// ============ HUMAN-LIKE HELPERS ============
+
+/** Random int between min and max (inclusive) */
+function randInt(min: number, max: number): number {
+    return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+/** Random float between min and max */
+function randFloat(min: number, max: number): number {
+    return Math.random() * (max - min) + min;
+}
+
+/** Human-like delay — sometimes short, sometimes long, occasional longer pauses */
+async function humanDelay(page: Page, minMs: number, maxMs: number): Promise<void> {
+    // 10% chance of an extra-long "distraction" pause (2x-3x)
+    const isDistracted = Math.random() < 0.1;
+    const base = randInt(minMs, maxMs);
+    const delay = isDistracted ? base * randFloat(2, 3) : base;
+    await page.waitForTimeout(Math.round(delay));
+}
+
+/** Human-like scroll — variable distance, sometimes small, sometimes large */
+async function humanScroll(page: Page): Promise<void> {
+    // Humans don't scroll perfectly — vary amount and speed
+    const scrollAmount = randInt(200, 900);
+
+    // 15% chance to scroll up a bit first (re-reading something)
+    if (Math.random() < 0.15) {
+        const upAmount = randInt(50, 200);
+        await page.evaluate((amt) => { (globalThis as any).scrollBy(0, -amt); }, upAmount);
+        await page.waitForTimeout(randInt(300, 800));
+    }
+
+    await page.evaluate((amt) => { (globalThis as any).scrollBy(0, amt); }, scrollAmount);
+}
+
 /**
- * Logger that writes to both console and file
+ * Pick a random subset of accounts to visit this run.
+ * With 30min schedule, each account gets checked several times/day.
  */
+function pickAccountsForThisRun(accounts: string[]): string[] {
+    const shuffled = [...accounts].sort(() => Math.random() - 0.5);
+    // Visit 3-6 accounts per run (or all if fewer than 3)
+    const count = Math.min(accounts.length, randInt(3, 6));
+    return shuffled.slice(0, count);
+}
+
+// ============ LOGGER ============
+
 class Logger {
     private logDir: string;
     private logPath: string = '';
@@ -68,23 +117,43 @@ class Logger {
     }
 }
 
-/**
- * Parse engagement count (e.g., "1.2K" -> 1200)
- */
+// ============ PARSING ============
+
 function parseCount(text: string | null): number {
     if (!text) return 0;
     text = text.trim().toLowerCase();
-    if (text.includes('k')) {
-        return Math.round(parseFloat(text) * 1000);
-    }
-    if (text.includes('m')) {
-        return Math.round(parseFloat(text) * 1000000);
-    }
+    if (text.includes('k')) return Math.round(parseFloat(text) * 1000);
+    if (text.includes('m')) return Math.round(parseFloat(text) * 1000000);
     return parseInt(text.replace(/,/g, '')) || 0;
 }
 
+// ============ SCRAPING ============
+
 /**
- * Scrape tweets for a user using Playwright
+ * Browse the home feed briefly — like a real user opening Twitter
+ */
+async function browseHomeFeed(page: Page, logger: Logger): Promise<void> {
+    logger.log('🏠 Browsing home feed...');
+    try {
+        await page.goto('https://x.com/home', {
+            waitUntil: 'domcontentloaded',
+            timeout: 30000,
+        });
+        await humanDelay(page, 3000, 8000);
+
+        // Scroll a bit through the feed
+        const scrolls = randInt(1, 4);
+        for (let i = 0; i < scrolls; i++) {
+            await humanScroll(page);
+            await humanDelay(page, 1500, 4000);
+        }
+    } catch (e: any) {
+        logger.log(`   ⚠️ Home feed browse failed: ${e.message}`);
+    }
+}
+
+/**
+ * Scrape tweets for a user — with human-like behavior
  */
 async function scrapeTweetsForUser(
     page: Page,
@@ -92,7 +161,7 @@ async function scrapeTweetsForUser(
     count: number,
     logger: Logger
 ): Promise<Tweet[]> {
-    logger.log(`🔍 Scraping tweets for @${username}...`);
+    logger.log(`🔍 Checking @${username}...`);
 
     const tweets: Tweet[] = [];
     const seenIds = new Set<string>();
@@ -103,12 +172,16 @@ async function scrapeTweetsForUser(
             timeout: 60000,
         });
 
-        await page.waitForTimeout(Math.floor(Math.random() * 3000) + 2000);
+        // Variable initial wait — like reading the bio / looking at the page
+        await humanDelay(page, 2000, 6000);
 
         await page.waitForSelector('article[data-testid="tweet"]', { timeout: 30000 });
 
+        // Another brief pause before scrolling
+        await humanDelay(page, 1000, 3000);
+
         let scrollAttempts = 0;
-        const maxScrollAttempts = 20;
+        const maxScrollAttempts = randInt(3, 8); // Don't always scroll the same amount
 
         while (tweets.length < count && scrollAttempts < maxScrollAttempts) {
             const tweetElements = await page.$$('article[data-testid="tweet"]');
@@ -145,7 +218,6 @@ async function scrapeTweetsForUser(
                     const retweetCount = parseCount(await retweetEl?.textContent() || null);
                     const likeCount = parseCount(await likeEl?.textContent() || null);
 
-                    // Check for Retweet indicator (Social Context)
                     const socialContextEl = await tweetEl.$('[data-testid="socialContext"]');
                     const socialText = await socialContextEl?.textContent() || '';
                     const isRetweet = socialText.toLowerCase().includes('retweeted');
@@ -166,11 +238,9 @@ async function scrapeTweetsForUser(
                 }
             }
 
-            const scrollAmount = Math.floor(Math.random() * 500) + 500;
-            await page.evaluate((amount) => { (globalThis as any).scrollBy(0, amount); }, scrollAmount);
-
-            const delay = Math.floor(Math.random() * 3000) + 2000;
-            await page.waitForTimeout(delay);
+            // Human-like scroll with variable reading time
+            await humanScroll(page);
+            await humanDelay(page, 2000, 5000);
             scrollAttempts++;
 
             logger.log(`   Collected ${tweets.length}/${count} tweets...`);
@@ -189,9 +259,8 @@ async function scrapeTweetsForUser(
     return tweets;
 }
 
-/**
- * Load existing tweets from raw dumps (for deduplication)
- */
+// ============ DEDUPLICATION ============
+
 async function loadExistingTweets(filePath: string): Promise<Tweet[]> {
     try {
         const data = await fs.readFile(filePath, 'utf-8');
@@ -201,9 +270,6 @@ async function loadExistingTweets(filePath: string): Promise<Tweet[]> {
     }
 }
 
-/**
- * Merge new tweets with existing ones, deduplicating by ID
- */
 function mergeTweets(existing: Tweet[], newTweets: Tweet[]): { merged: Tweet[]; newCount: number } {
     const existingIds = new Set(existing.map(t => t.id));
     const uniqueNew = newTweets.filter(t => !existingIds.has(t.id));
@@ -214,15 +280,15 @@ function mergeTweets(existing: Tweet[], newTweets: Tweet[]): { merged: Tweet[]; 
     };
 }
 
+// ============ MAIN ============
+
 async function main() {
     const config = await loadConfig();
     const paths = getResolvedPaths(config);
 
-    // Get plugin-specific config
     const pluginConfig = await loadPluginConfig<TwitterPluginConfig>('twitter');
     const twitterConfig = pluginConfig || DEFAULT_CONFIG;
 
-    // Use plugin paths
     const logsDir = path.join(paths.logs, 'twitter');
     const rawDumpsDir = path.join(paths.rawDumps, 'twitter');
 
@@ -231,32 +297,26 @@ async function main() {
     logger.log(`🐦 Twitter Scraper (GET only)`);
     logger.log(`📅 Started: ${getTodayString()}`);
 
-    const accounts = twitterConfig.accounts || [];
-    if (accounts.length === 0) {
+    const allAccounts = twitterConfig.accounts || [];
+    if (allAccounts.length === 0) {
         logger.error('No Twitter accounts configured.');
         const logFile = await logger.save();
         console.log(`\n📄 Log saved to: ${logFile}`);
         process.exit(1);
     }
 
-    const shuffleArray = <T>(arr: T[]): T[] => {
-        const shuffled = [...arr];
-        for (let i = shuffled.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-        }
-        return shuffled;
-    };
-    const shuffledAccounts = shuffleArray(accounts);
+    // Pick a random subset for this run
+    const accounts = pickAccountsForThisRun(allAccounts);
+    // Randomize tweet count per account: 5-15 (just the recent ones)
+    const baseTweetCount = Math.min(twitterConfig.tweetsPerAccount || 10, 15);
 
-    const tweetsPerAccount = twitterConfig.tweetsPerAccount || DEFAULT_CONFIG.tweetsPerAccount;
     logger.log(`📂 Raw dumps: ${rawDumpsDir}`);
-    logger.log(`👥 Accounts (randomized): ${shuffledAccounts.join(', ')}`);
-    logger.log(`📊 Tweets per account: ${tweetsPerAccount}\n`);
+    logger.log(`👥 This run: ${accounts.join(', ')} (${accounts.length}/${allAccounts.length} accounts)`);
+    logger.log(`📊 ~${baseTweetCount} tweets per account (varies)\n`);
 
     await fs.mkdir(rawDumpsDir, { recursive: true });
 
-    // Check for saved session (from twitter:login)
+    // Check for saved session
     const statePath = paths.twitterSession;
     let hasState = false;
     try {
@@ -274,7 +334,7 @@ async function main() {
     const context = await browser.newContext({
         ...(hasState ? { storageState: statePath } : {}),
         userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        viewport: { width: 1280, height: 800 },
+        viewport: { width: randInt(1200, 1400), height: randInt(750, 900) },
     });
     const page = await context.newPage();
 
@@ -282,10 +342,19 @@ async function main() {
     let totalTotal = 0;
 
     try {
-        for (const username of shuffledAccounts) {
+        // Start by browsing home feed like a real user
+        if (hasState) {
+            await browseHomeFeed(page, logger);
+        }
+
+        for (let i = 0; i < accounts.length; i++) {
+            const username = accounts[i];
             const rawPath = path.join(rawDumpsDir, `${username}.json`);
 
-            const newTweets = await scrapeTweetsForUser(page, username, tweetsPerAccount, logger);
+            // Vary tweet count per account: ±40% of base
+            const tweetsForThis = Math.max(3, Math.round(baseTweetCount * randFloat(0.6, 1.4)));
+
+            const newTweets = await scrapeTweetsForUser(page, username, tweetsForThis, logger);
 
             if (newTweets.length > 0) {
                 const existingTweets = await loadExistingTweets(rawPath);
@@ -298,10 +367,11 @@ async function main() {
                 totalTotal += merged.length;
             }
 
-            if (shuffledAccounts.indexOf(username) < shuffledAccounts.length - 1) {
-                const accountDelay = Math.floor(Math.random() * 5000) + 5000;
-                logger.log(`   ⏳ Waiting ${Math.round(accountDelay / 1000)}s before next account...`);
-                await page.waitForTimeout(accountDelay);
+            // Human-like delay between profiles — long and variable
+            if (i < accounts.length - 1) {
+                const delay = randInt(15000, 45000);
+                logger.log(`   ⏳ Waiting ${Math.round(delay / 1000)}s before next profile...`);
+                await page.waitForTimeout(delay);
             }
         }
     } finally {
@@ -309,9 +379,9 @@ async function main() {
     }
 
     logger.log(`\n📊 Summary:`);
+    logger.log(`   Accounts checked: ${accounts.length}/${allAccounts.length}`);
     logger.log(`   New tweets: ${totalNew}`);
-    logger.log(`   Total tweets: ${totalTotal}`);
-    logger.log(`   Accounts processed: ${shuffledAccounts.length}`);
+    logger.log(`   Total tweets in store: ${totalTotal}`);
     logger.log('\n✅ GET complete. Run `npm run twitter:process` to process raw data.');
 
     const logFile = await logger.save();
