@@ -404,6 +404,11 @@ async function copyImages(
     }
 }
 
+function normalizeContent(content: string): string {
+    const lines = content.split('\n');
+    return lines.filter(line => !line.trim().startsWith('Export Date:')).join('\n');
+}
+
 async function main() {
     console.log('📸 Instagram Process - Generating MindCache files per day\n');
 
@@ -547,12 +552,28 @@ async function main() {
             dayPostCount += posts.length;
         }
 
+        totalPosts += dayPostCount;
+
         // Write to file
         const localPath = path.join(outputDir, `instagram-${dateStr}.md`);
-        await fs.writeFile(localPath, mindcache.toMarkdown(), 'utf-8');
+        const newContent = mindcache.toMarkdown();
+        let shouldWrite = true;
 
-        totalPosts += dayPostCount;
-        filesGenerated++;
+        try {
+            const existingContent = await fs.readFile(localPath, 'utf-8');
+            if (normalizeContent(existingContent) === normalizeContent(newContent)) {
+                shouldWrite = false;
+            }
+        } catch {
+            // File doesn't exist, we must write
+        }
+
+        if (shouldWrite) {
+            await fs.writeFile(localPath, newContent, 'utf-8');
+            filesGenerated++;
+        } else {
+            console.log(`      ⏭️  Skipped ${path.basename(localPath)} (no changes)`);
+        }
     }
 
     console.log(`\n📊 Summary:`);
