@@ -10,6 +10,7 @@ import { LinkedInPluginConfig, DEFAULT_CONFIG } from './config';
 import { Contact, CONTACT_SCHEMA } from '../../shared/contact';
 import { LinkedinMessage, MESSAGE_SCHEMA } from './types';
 import { loadLinkedInContacts, loadLinkedInMessages } from './utils';
+import { writeIfChanged } from '../../shared/write-if-changed';
 
 function generateContactMarkdown(contacts: Contact[], exportDate: string): string {
     const lines: string[] = [
@@ -132,8 +133,12 @@ async function main() {
     if (contacts.length > 0) {
         const contactMd = generateContactMarkdown(contacts, today);
         const contactPath = path.join(outputDir, 'linkedin-contacts.md');
-        await fs.writeFile(contactPath, contactMd);
-        console.log(`   ✅ Generated ${path.basename(contactPath)} (${contacts.length} contacts)`);
+        const written = await writeIfChanged(contactPath, contactMd);
+        if (written) {
+            console.log(`   ✅ Generated ${path.basename(contactPath)} (${contacts.length} contacts)`);
+        } else {
+            console.log(`   ⏭️  Skipped ${path.basename(contactPath)} (no changes)`);
+        }
     } else {
         console.log('   ⚠️ No contacts found.');
     }
@@ -143,10 +148,13 @@ async function main() {
     if (messages.length > 0) {
         const messageMd = generateMessageMarkdown(messages, today);
         const messagePath = path.join(outputDir, 'linkedin-messages.md');
-        await fs.writeFile(messagePath, messageMd);
-        // Count conversations for logging
         const convCount = new Set(messages.map(m => m.conversationId)).size;
-        console.log(`   ✅ Generated ${path.basename(messagePath)} (${convCount} conversations, ${messages.length} messages)`);
+        const written = await writeIfChanged(messagePath, messageMd);
+        if (written) {
+            console.log(`   ✅ Generated ${path.basename(messagePath)} (${convCount} conversations, ${messages.length} messages)`);
+        } else {
+            console.log(`   ⏭️  Skipped ${path.basename(messagePath)} (no changes)`);
+        }
     } else {
         console.log('   ⚠️ No messages found.');
     }

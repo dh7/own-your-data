@@ -12,6 +12,7 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import { MindCache } from 'mindcache';
 import { loadConfig, getResolvedPaths } from '../../config/config';
+import { writeIfChanged } from '../../shared/write-if-changed';
 
 interface InstaPost {
     id: string;
@@ -404,10 +405,6 @@ async function copyImages(
     }
 }
 
-function normalizeContent(content: string): string {
-    const lines = content.split('\n');
-    return lines.filter(line => !line.trim().startsWith('Export Date:')).join('\n');
-}
 
 async function main() {
     console.log('📸 Instagram Process - Generating MindCache files per day\n');
@@ -554,22 +551,10 @@ async function main() {
 
         totalPosts += dayPostCount;
 
-        // Write to file
+        // Write to file only if content changed
         const localPath = path.join(outputDir, `instagram-${dateStr}.md`);
-        const newContent = mindcache.toMarkdown();
-        let shouldWrite = true;
-
-        try {
-            const existingContent = await fs.readFile(localPath, 'utf-8');
-            if (normalizeContent(existingContent) === normalizeContent(newContent)) {
-                shouldWrite = false;
-            }
-        } catch {
-            // File doesn't exist, we must write
-        }
-
-        if (shouldWrite) {
-            await fs.writeFile(localPath, newContent, 'utf-8');
+        const written = await writeIfChanged(localPath, mindcache.toMarkdown());
+        if (written) {
             filesGenerated++;
         } else {
             console.log(`      ⏭️  Skipped ${path.basename(localPath)} (no changes)`);

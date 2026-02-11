@@ -11,6 +11,7 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import { MindCache } from 'mindcache';
 import { loadConfig, getResolvedPaths } from '../../config/config';
+import { writeIfChanged } from '../../shared/write-if-changed';
 import { TranscriptsPluginConfig, DEFAULT_CONFIG, SUPPORTED_AUDIO_EXTENSIONS, WHISPERX_DOCKER_IMAGE } from './config';
 import { TranscriptEntry, TranscriptMetadata, ProcessedDay } from './types';
 
@@ -299,8 +300,12 @@ async function main() {
     for (const day of byDate) {
         const mindCacheContent = generateMindCache(day);
         const mdPath = path.join(outputDir, `transcripts-${day.date}.md`);
-        await fs.writeFile(mdPath, mindCacheContent);
-        console.log(`   ✅ ${day.date}: ${day.transcripts.length} transcript(s)`);
+        const written = await writeIfChanged(mdPath, mindCacheContent);
+        if (written) {
+            console.log(`   ✅ ${day.date}: ${day.transcripts.length} transcript(s)`);
+        } else {
+            console.log(`   ⏭️  Skipped ${path.basename(mdPath)} (no changes)`);
+        }
     }
 
     console.log(`\n📊 Summary:`);

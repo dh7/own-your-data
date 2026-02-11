@@ -9,6 +9,7 @@ import { loadConfig, getResolvedPaths, getTodayString } from '../../config/confi
 import { GoogleContactsPluginConfig, DEFAULT_CONFIG } from './config';
 import { parseCSV } from '../../shared/csv';
 import { Contact, CONTACT_SCHEMA } from '../../shared/contact';
+import { writeIfChanged } from '../../shared/write-if-changed';
 
 // Map CSV headers to Contact properties
 function mapToContact(row: Record<string, string>): Contact {
@@ -135,9 +136,13 @@ async function main() {
 
         const mdContent = generateMindCacheContent(contacts, today);
         const mdPath = path.join(outputDir, 'google-contacts.md');
-        await fs.writeFile(mdPath, mdContent);
+        const written = await writeIfChanged(mdPath, mdContent);
 
-        console.log(`   ✅ Generated ${path.basename(mdPath)} (${contacts.length} contacts)`);
+        if (written) {
+            console.log(`   ✅ Generated ${path.basename(mdPath)} (${contacts.length} contacts)`);
+        } else {
+            console.log(`   ⏭️  Skipped ${path.basename(mdPath)} (no changes)`);
+        }
         console.log(`\n✨ Done! Files saved to: ${outputDir}`);
 
     } catch (error: any) {

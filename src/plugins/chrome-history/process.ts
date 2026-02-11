@@ -12,6 +12,7 @@ import { MindCache } from 'mindcache';
 import { loadConfig, getResolvedPaths } from '../../config/config';
 import { ChromeHistoryPluginConfig, DEFAULT_CONFIG } from './config';
 import { UrlEntry } from './types';
+import { writeIfChanged } from '../../shared/write-if-changed';
 
 /**
  * Group URLs by domain for better organization
@@ -140,13 +141,17 @@ async function main() {
             });
         }
 
-        // Write to file
+        // Write to file only if content changed
         const localPath = path.join(outputDir, `chrome-${dateStr}.md`);
-        await fs.writeFile(localPath, mindcache.toMarkdown(), 'utf-8');
+        const written = await writeIfChanged(localPath, mindcache.toMarkdown());
 
-        console.log(`   📅 ${dateStr}: ${urls.length} URLs across ${sortedDomains.length} domains`);
         totalUrls += urls.length;
-        filesGenerated++;
+        if (written) {
+            console.log(`   📅 ${dateStr}: ${urls.length} URLs across ${sortedDomains.length} domains`);
+            filesGenerated++;
+        } else {
+            console.log(`   ⏭️  Skipped ${path.basename(localPath)} (no changes)`);
+        }
     }
 
     console.log(`\n📊 Summary:`);

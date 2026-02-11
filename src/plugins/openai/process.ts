@@ -9,6 +9,7 @@ import { MindCache } from 'mindcache';
 import { loadConfig, getResolvedPaths, getTodayString } from '../../config/config';
 import { OpenAIPluginConfig, DEFAULT_CONFIG } from './config';
 import { OpenAIExport, OpenAINode } from './types';
+import { writeIfChanged } from '../../shared/write-if-changed';
 
 // Helper to reconstruct conversation thread from leaf node
 function recreateConversation(mapping: { [key: string]: OpenAINode }, leafId: string): OpenAINode[] {
@@ -169,11 +170,13 @@ async function main() {
     }
 
     const mdPath = path.join(outputDir, 'openai-conversations.md');
-    // For large exports, `toMarkdown` might be heavy.
-    // But let's assume it works.
-    await fs.writeFile(mdPath, mindcache.toMarkdown());
+    const written = await writeIfChanged(mdPath, mindcache.toMarkdown());
 
-    console.log(`   ✅ Generated ${path.basename(mdPath)} (${conversations.length} conversations)`);
+    if (written) {
+        console.log(`   ✅ Generated ${path.basename(mdPath)} (${conversations.length} conversations)`);
+    } else {
+        console.log(`   ⏭️  Skipped ${path.basename(mdPath)} (no changes)`);
+    }
     console.log(`\n✨ Done! Files saved to: ${outputDir}`);
 }
 

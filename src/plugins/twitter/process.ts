@@ -10,6 +10,7 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import { MindCache } from 'mindcache';
 import { loadConfig, getResolvedPaths } from '../../config/config';
+import { writeIfChanged } from '../../shared/write-if-changed';
 
 interface Tweet {
     id: string;
@@ -152,13 +153,17 @@ async function main() {
             dayTweetCount += tweets.length;
         }
 
-        // Write to file
+        // Write to file only if content changed
         const localPath = path.join(outputDir, `twitter-${dateStr}.md`);
-        await fs.writeFile(localPath, mindcache.toMarkdown(), 'utf-8');
+        const written = await writeIfChanged(localPath, mindcache.toMarkdown());
 
-        console.log(`   📅 ${dateStr}: ${dayTweetCount} tweets from ${usersMap.size} accounts`);
         totalTweets += dayTweetCount;
-        filesGenerated++;
+        if (written) {
+            console.log(`   📅 ${dateStr}: ${dayTweetCount} tweets from ${usersMap.size} accounts`);
+            filesGenerated++;
+        } else {
+            console.log(`   ⏭️  Skipped ${path.basename(localPath)} (no changes)`);
+        }
     }
 
     console.log(`\n📊 Summary:`);

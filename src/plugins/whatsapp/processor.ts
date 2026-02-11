@@ -7,6 +7,7 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import { MindCache } from 'mindcache';
 import { AppConfig, getResolvedPaths, getTodayString } from '../../config/config';
+import { writeIfChanged } from '../../shared/write-if-changed';
 import {
     type RawMessage,
     type ProcessedMessage,
@@ -176,7 +177,7 @@ export async function processRawDumps(config: AppConfig, daysToLookBack: number)
         }
 
         const localPath = path.join(paths.whatsappLocal, `whatsapp-${dateStr}.md`);
-        await fs.writeFile(localPath, mindcache.toMarkdown(), 'utf-8');
+        await writeIfChanged(localPath, mindcache.toMarkdown());
     }
 
     console.log(`   ✅ Reconstructed headers for ${processedCount} messages across ${allDays.size} days.`);
