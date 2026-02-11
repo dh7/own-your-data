@@ -16,6 +16,7 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import { loadConfig, loadPluginConfig, getResolvedPaths, getTodayString } from '../../config/config';
 import { TwitterPluginConfig, DEFAULT_CONFIG } from './config';
+import { initPluginLog } from '../../shared/plugin-logger';
 
 interface Tweet {
     id: string;
@@ -283,6 +284,7 @@ function mergeTweets(existing: Tweet[], newTweets: Tweet[]): { merged: Tweet[]; 
 // ============ MAIN ============
 
 async function main() {
+    initPluginLog('twitter');
     const config = await loadConfig();
     const paths = getResolvedPaths(config);
 

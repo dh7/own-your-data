@@ -111,6 +111,7 @@ export function renderTemplate(
             <code>npm run google-contacts:process</code> - Process CSV<br>
             <code>npm run google-contacts:push</code> - Sync to GitHub
         </p>
+        <button type="button" class="btn small-btn secondary" onclick="viewPluginLogs('google-contacts')" style="margin-top: 0.5rem;">📋 View Logs</button>
     </div>
 </details>
 `;

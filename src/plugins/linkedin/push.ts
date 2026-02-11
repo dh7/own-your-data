@@ -10,6 +10,7 @@ import { LinkedInPluginConfig, DEFAULT_CONFIG } from './config';
 import { CONTACT_SCHEMA } from '../../shared/contact';
 import { loadLinkedInContacts, loadLinkedInMessages } from './utils';
 import * as path from 'path';
+import { initPluginLog } from '../../shared/plugin-logger';
 
 function buildConversationTranscript(title: string, msgs: any[]): string {
     const lines = [`# ${title}`, ''];
@@ -31,6 +32,7 @@ function buildConversationTranscript(title: string, msgs: any[]): string {
 }
 
 async function main() {
+    initPluginLog('linkedin');
     const config = await loadConfig();
     const paths = getResolvedPaths(config);
 

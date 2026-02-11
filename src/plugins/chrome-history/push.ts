@@ -10,6 +10,7 @@ import { GitStore, MindCacheSync } from '@mindcache/gitstore';
 import { loadConfig, getResolvedPaths, loadGitHubConfig, getTodayString } from '../../config/config';
 import { ChromeHistoryPluginConfig, DEFAULT_CONFIG } from './config';
 import { UrlEntry } from './types';
+import { initPluginLog } from '../../shared/plugin-logger';
 
 /**
  * Load all history files from raw-dumps/chrome-history
@@ -108,6 +109,7 @@ function formatDayAsMarkdown(date: string, urls: UrlEntry[]): string {
 }
 
 async function main() {
+    initPluginLog('chrome-history');
     const config = await loadConfig();
     const paths = getResolvedPaths(config);
 

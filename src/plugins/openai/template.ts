@@ -147,6 +147,7 @@ export function renderTemplate(
             <code>npm run openai:process</code> - Process raw data<br>
             <code>npm run openai:push</code> - Sync to GitHub
         </p>
+        <button type="button" class="btn small-btn secondary" onclick="viewPluginLogs('openai')" style="margin-top: 0.5rem;">📋 View Logs</button>
     </div>
 </details>
 `;

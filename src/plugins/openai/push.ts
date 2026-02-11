@@ -9,8 +9,10 @@ import { MindCache } from 'mindcache';
 import { GitStore, MindCacheSync } from '@mindcache/gitstore';
 import { loadConfig, getResolvedPaths, loadGitHubConfig, getTodayString } from '../../config/config';
 import { OpenAIPluginConfig, DEFAULT_CONFIG } from './config';
+import { initPluginLog } from '../../shared/plugin-logger';
 
 async function main() {
+    initPluginLog('openai');
     const config = await loadConfig();
     const paths = getResolvedPaths(config);
 

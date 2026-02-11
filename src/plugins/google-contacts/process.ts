@@ -10,6 +10,7 @@ import { GoogleContactsPluginConfig, DEFAULT_CONFIG } from './config';
 import { parseCSV } from '../../shared/csv';
 import { Contact, CONTACT_SCHEMA } from '../../shared/contact';
 import { writeIfChanged } from '../../shared/write-if-changed';
+import { initPluginLog } from '../../shared/plugin-logger';
 
 // Map CSV headers to Contact properties
 function mapToContact(row: Record<string, string>): Contact {
@@ -104,6 +105,7 @@ function generateMindCacheContent(contacts: Contact[], exportDate: string): stri
 }
 
 async function main() {
+    initPluginLog('google-contacts');
     console.log('👥 Google Contacts Process - Generating MindCache files\n');
 
     const config = await loadConfig();

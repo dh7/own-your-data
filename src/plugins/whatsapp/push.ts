@@ -15,6 +15,7 @@ import { MindCache } from 'mindcache';
 import { GitStore, MindCacheSync } from '@mindcache/gitstore';
 import { loadConfig, loadPluginConfig, getResolvedPaths, loadGitHubConfig, getTodayString } from '../../config/config';
 import { WhatsAppPluginConfig, DEFAULT_CONFIG } from './config';
+import { initPluginLog } from '../../shared/plugin-logger';
 
 /**
  * Get date strings for the last N days (including today)
@@ -69,6 +70,7 @@ async function uploadFileToGitHub(
 }
 
 async function main() {
+    initPluginLog('whatsapp');
     const config = await loadConfig();
     const paths = getResolvedPaths(config);
     const pluginConfig = await loadPluginConfig<WhatsAppPluginConfig>('whatsapp');

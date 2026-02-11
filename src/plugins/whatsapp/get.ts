@@ -11,6 +11,7 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import { loadConfig, getResolvedPaths, getTodayString } from '../../config/config';
 import { collectRawMessages } from './collector';
+import { initPluginLog } from '../../shared/plugin-logger';
 
 /**
  * Logger that writes to both console and file
@@ -52,6 +53,7 @@ class Logger {
 }
 
 async function main() {
+    initPluginLog('whatsapp');
     // Load config
     const config = await loadConfig();
     const paths = getResolvedPaths(config);

@@ -22,10 +22,12 @@
 
 import { loadConfig } from '../../config/config';
 import { processRawDumps } from './processor';
+import { initPluginLog } from '../../shared/plugin-logger';
 
 const DAYS_TO_PROCESS = 7;
 
 async function main() {
+    initPluginLog('whatsapp');
     // Load config
     const config = await loadConfig();
 

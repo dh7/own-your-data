@@ -9,6 +9,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { loadConfig, getResolvedPaths, loadPluginConfig, loadGitHubConfig, getTodayString } from '../../config/config';
 import { GithubBackupConfig, DEFAULT_CONFIG } from './config';
+import { initPluginLog } from '../../shared/plugin-logger';
 
 function git(cmd: string, cwd: string): string {
     console.log(`  $ git ${cmd}`);
@@ -35,6 +36,7 @@ function findGitRoot(dir: string): string | null {
 }
 
 async function main() {
+    initPluginLog('github-backup');
     const config = await loadConfig();
     const paths = getResolvedPaths(config);
     const pluginConfig = await loadPluginConfig<GithubBackupConfig>('github-backup');

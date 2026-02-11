@@ -12,8 +12,10 @@ import { GitStore, MindCacheSync } from '@mindcache/gitstore';
 import { loadConfig, getResolvedPaths, loadGitHubConfig, getTodayString } from '../../config/config';
 import { TranscriptsPluginConfig, DEFAULT_CONFIG } from './config';
 import { TranscriptEntry } from './types';
+import { initPluginLog } from '../../shared/plugin-logger';
 
 async function main() {
+    initPluginLog('transcripts');
     const config = await loadConfig();
     const paths = getResolvedPaths(config);
 

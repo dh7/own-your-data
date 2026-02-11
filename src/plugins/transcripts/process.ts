@@ -13,6 +13,7 @@ import { MindCache } from 'mindcache';
 import { loadConfig, getResolvedPaths } from '../../config/config';
 import { writeIfChanged } from '../../shared/write-if-changed';
 import { TranscriptsPluginConfig, DEFAULT_CONFIG, SUPPORTED_AUDIO_EXTENSIONS, WHISPERX_DOCKER_IMAGE } from './config';
+import { initPluginLog } from '../../shared/plugin-logger';
 import { TranscriptEntry, TranscriptMetadata, ProcessedDay } from './types';
 
 const execAsync = promisify(exec);
@@ -201,6 +202,7 @@ async function checkDocker(): Promise<boolean> {
 }
 
 async function main() {
+    initPluginLog('transcripts');
     console.log('🎙️ Transcripts Process - Transcribing audio files (WhisperX)\n');
 
     const config = await loadConfig();

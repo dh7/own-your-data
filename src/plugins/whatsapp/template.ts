@@ -108,6 +108,7 @@ export function renderTemplate(
             <strong>Commands:</strong><br>
             <code style="background: #f5f5f5; padding: 0.25rem 0.5rem; border-radius: 4px;">npm run whatsapp:get</code> - Start WhatsApp listener server
         </p>
+        <button type="button" class="btn small-btn secondary" onclick="viewPluginLogs('whatsapp')" style="margin-top: 0.5rem;">📋 View Logs</button>
     </div>
 </details>
 `;

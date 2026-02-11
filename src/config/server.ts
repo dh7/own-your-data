@@ -448,8 +448,8 @@ app.get('/', async (req, res) => {
     if (!plugin) continue;
 
     // Load from config/{pluginId}.json, fall back to legacy config.plugins, then defaults
-    const pluginConfig = await loadPluginConfig(discovered.manifest.id) 
-      || (config.plugins?.[discovered.manifest.id] as PluginConfig | undefined) 
+    const pluginConfig = await loadPluginConfig(discovered.manifest.id)
+      || (config.plugins?.[discovered.manifest.id] as PluginConfig | undefined)
       || plugin.getDefaultConfig();
     const schedulerConfig = await resolvePluginSchedule(discovered);
     const availableCommands = getAvailableCommands(discovered);
@@ -759,9 +759,9 @@ app.post('/scheduler/plugin/:id', async (req, res) => {
       ...(nextConfig.cadence === 'fixed' && nextConfig.fixedTimes.length > 0
         ? { fixedTimes: nextConfig.fixedTimes }
         : {
-            intervalHours: nextConfig.intervalHours,
-            jitterMinutes: nextConfig.jitterMinutes,
-          }),
+          intervalHours: nextConfig.intervalHours,
+          jitterMinutes: nextConfig.jitterMinutes,
+        }),
     };
     schedulerJson.tasks.push(task);
   } else {
@@ -805,6 +805,11 @@ app.post('/scheduler/run/:pluginId/:command', async (req, res) => {
 
     console.log(`▶️ Manual run: ${pluginId}:${command} → ${cmd}`);
 
+    // Log file — same flat file the plugin scripts append to
+    const logDir = path.join(process.cwd(), 'logs');
+    await fs.mkdir(logDir, { recursive: true });
+    const logPath = path.join(logDir, `${pluginId}.log`);
+
     const { spawn } = await import('child_process');
     const child = spawn(cmd, {
       cwd: process.cwd(),
@@ -824,7 +829,7 @@ app.post('/scheduler/run/:pluginId/:command', async (req, res) => {
       process.stderr.write(data);
     });
 
-    child.on('close', (code) => {
+    child.on('close', async (code) => {
       if (code === 0) {
         console.log(`✅ ${pluginId}:${command} completed`);
         res.json({ success: true, output: stdout, stderr });
@@ -840,6 +845,22 @@ app.post('/scheduler/run/:pluginId/:command', async (req, res) => {
     });
   } catch (e: any) {
     res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// View plugin logs
+app.get('/plugin/logs/:pluginId', async (req, res) => {
+  const pluginId = req.params.pluginId;
+  const maxLines = Math.min(Math.max(parseInt(req.query.lines as string, 10) || 500, 10), 5000);
+  const logPath = path.join(process.cwd(), 'logs', `${pluginId}.log`);
+
+  try {
+    const content = await fs.readFile(logPath, 'utf-8');
+    const lines = content.split('\n');
+    const tail = lines.slice(-maxLines).join('\n');
+    res.json({ logs: tail, file: `${pluginId}.log` });
+  } catch {
+    res.json({ logs: 'No logs yet. Run a command first.', file: '' });
   }
 });
 
@@ -872,7 +893,7 @@ app.post('/plugin/:id', async (req, res) => {
     const existingConfig = await loadPluginConfig(pluginId) || {};
     const parsedPluginConfig = plugin.parseFormData(req.body) as PluginConfig;
     const pluginConfig = { ...existingConfig, ...parsedPluginConfig };
-    
+
     // Save to config/{pluginId}.json (new location)
     await savePluginConfig(pluginId, pluginConfig);
 
@@ -1750,7 +1771,7 @@ app.post('/system/service/:id/:action', async (req, res) => {
     // Tunnel runs as standalone process - start/stop via PID
     if (serviceId === 'tunnel') {
       const tunnelPidPath = path.join(process.cwd(), 'logs', 'tunnel.pid');
-      
+
       if (action === 'stop' || action === 'restart') {
         try {
           const pidData = await fs.readFile(tunnelPidPath, 'utf-8');
@@ -1761,7 +1782,7 @@ app.post('/system/service/:id/:action', async (req, res) => {
           }
         } catch { /* no pid file or process */ }
       }
-      
+
       if (action === 'start' || action === 'restart') {
         const { spawn } = await import('child_process');
         const child = spawn('npm', ['run', 'tunnel'], {
@@ -1771,7 +1792,7 @@ app.post('/system/service/:id/:action', async (req, res) => {
         });
         child.unref();
       }
-      
+
       res.json({ success: true, message: `Tunnel ${action} complete` });
       return;
     }

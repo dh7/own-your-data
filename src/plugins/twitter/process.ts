@@ -11,6 +11,7 @@ import * as path from 'path';
 import { MindCache } from 'mindcache';
 import { loadConfig, getResolvedPaths } from '../../config/config';
 import { writeIfChanged } from '../../shared/write-if-changed';
+import { initPluginLog } from '../../shared/plugin-logger';
 
 interface Tweet {
     id: string;
@@ -28,6 +29,7 @@ interface Tweet {
 }
 
 async function main() {
+    initPluginLog('twitter');
     console.log('🐦 Twitter Process - Generating MindCache files per day\n');
 
     const config = await loadConfig();

@@ -11,6 +11,7 @@ import { MindCache } from 'mindcache';
 import { GitStore, MindCacheSync } from '@mindcache/gitstore';
 import { loadConfig, loadPluginConfig, getResolvedPaths, loadGitHubConfig, getTodayString } from '../../config/config';
 import { TwitterPluginConfig, DEFAULT_CONFIG } from './config';
+import { initPluginLog } from '../../shared/plugin-logger';
 
 interface Tweet {
     id: string;
@@ -100,6 +101,7 @@ function tweetToMindCacheEntry(tweet: Tweet): string {
 }
 
 async function main() {
+    initPluginLog('twitter');
     const config = await loadConfig();
     const paths = getResolvedPaths(config);
 

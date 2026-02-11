@@ -131,6 +131,7 @@ export function renderTemplate(
             <code>npm run linkedin:process</code> - Process CSV<br>
             <code>npm run linkedin:push</code> - Sync to GitHub
         </p>
+        <button type="button" class="btn small-btn secondary" onclick="viewPluginLogs('linkedin')" style="margin-top: 0.5rem;">📋 View Logs</button>
     </div>
 </details>
 `;

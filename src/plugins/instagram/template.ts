@@ -122,6 +122,7 @@ export function renderTemplate(
             <code>npm run instagram:process</code> - Process raw data<br>
             <code>npm run instagram:push</code> - Sync to GitHub
         </p>
+        <button type="button" class="btn small-btn secondary" onclick="viewPluginLogs('instagram')" style="margin-top: 0.5rem;">📋 View Logs</button>
     </div>
 </details>
 

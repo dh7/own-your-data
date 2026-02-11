@@ -10,8 +10,10 @@ import { GitStore, MindCacheSync } from '@mindcache/gitstore';
 import { loadConfig, getResolvedPaths, loadGitHubConfig, getTodayString } from '../../config/config';
 import { GoogleContactsPluginConfig, DEFAULT_CONFIG } from './config';
 import { Contact, CONTACT_SCHEMA } from '../../shared/contact';
+import { initPluginLog } from '../../shared/plugin-logger';
 
 async function main() {
+    initPluginLog('google-contacts');
     const config = await loadConfig();
     const paths = getResolvedPaths(config);
 

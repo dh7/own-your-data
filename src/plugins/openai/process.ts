@@ -10,6 +10,7 @@ import { loadConfig, getResolvedPaths, getTodayString } from '../../config/confi
 import { OpenAIPluginConfig, DEFAULT_CONFIG } from './config';
 import { OpenAIExport, OpenAINode } from './types';
 import { writeIfChanged } from '../../shared/write-if-changed';
+import { initPluginLog } from '../../shared/plugin-logger';
 
 // Helper to reconstruct conversation thread from leaf node
 function recreateConversation(mapping: { [key: string]: OpenAINode }, leafId: string): OpenAINode[] {
@@ -46,6 +47,7 @@ function formatMessageContent(content: any): string {
 }
 
 async function main() {
+    initPluginLog('openai');
     console.log('🤖 OpenAI Process - Generating MindCache files\n');
 
     const config = await loadConfig();

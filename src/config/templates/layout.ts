@@ -746,6 +746,25 @@ export function renderLayout(sections: string[], options: LayoutOptions = {}): s
         document.getElementById('log-viewer-overlay').classList.remove('active');
     }
 
+    async function viewPluginLogs(pluginId) {
+        const overlay = document.getElementById('log-viewer-overlay');
+        const title = document.getElementById('log-viewer-title');
+        const content = document.getElementById('log-viewer-content');
+        title.textContent = pluginId + ' — Logs';
+        content.textContent = 'Loading...';
+        overlay.classList.add('active');
+        _logViewerServiceId = null;
+        try {
+            const res = await fetch('/plugin/logs/' + encodeURIComponent(pluginId));
+            const data = await res.json();
+            title.textContent = (data.file ? data.file + ' — ' : '') + pluginId;
+            content.textContent = data.logs || '(empty)';
+            content.parentElement.scrollTop = content.parentElement.scrollHeight;
+        } catch (e) {
+            content.textContent = 'Error loading logs: ' + (e.message || e);
+        }
+    }
+
     // ---- Services Status Refresh (no full page reload) ----
 
     function buildActionButtons(service) {

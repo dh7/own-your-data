@@ -11,6 +11,7 @@ import { MindCache } from 'mindcache';
 import { GitStore, MindCacheSync } from '@mindcache/gitstore';
 import { loadConfig, loadPluginConfig, getResolvedPaths, loadGitHubConfig, getTodayString } from '../../config/config';
 import { InstagramPluginConfig, DEFAULT_CONFIG } from './config';
+import { initPluginLog } from '../../shared/plugin-logger';
 
 interface InstaPost {
     id: string;
@@ -62,6 +63,7 @@ function postToMindCacheEntry(post: InstaPost): string {
 }
 
 async function main() {
+    initPluginLog('instagram');
     const config = await loadConfig();
     const paths = getResolvedPaths(config);
 

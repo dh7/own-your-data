@@ -68,6 +68,7 @@ export function renderTemplate(
             <strong>Commands:</strong><br>
             <code>npm run github-backup:push</code> - Push to GitHub
         </p>
+        <button type="button" class="btn small-btn secondary" onclick="viewPluginLogs('github-backup')" style="margin-top: 0.5rem;">📋 View Logs</button>
     </div>
 </details>
 `;

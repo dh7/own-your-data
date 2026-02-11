@@ -13,6 +13,7 @@ import { loadConfig, getResolvedPaths } from '../../config/config';
 import { ChromeHistoryPluginConfig, DEFAULT_CONFIG } from './config';
 import { UrlEntry } from './types';
 import { writeIfChanged } from '../../shared/write-if-changed';
+import { initPluginLog } from '../../shared/plugin-logger';
 
 /**
  * Group URLs by domain for better organization
@@ -38,6 +39,7 @@ function groupByDomain(urls: UrlEntry[]): Map<string, UrlEntry[]> {
 
 
 async function main() {
+    initPluginLog('chrome-history');
     console.log('🌐 Chrome History Process - Generating MindCache files\n');
 
     const config = await loadConfig();

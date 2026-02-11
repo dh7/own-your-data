@@ -12,7 +12,7 @@ import { chromium, Page, BrowserContext } from 'playwright';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { loadConfig, loadPluginConfig, getResolvedPaths, getTodayString } from '../../config/config';
-
+import { initPluginLog } from '../../shared/plugin-logger';
 import { InstagramPluginConfig, DEFAULT_CONFIG } from './config';
 
 interface InstaPost {
@@ -331,6 +331,7 @@ async function scrapePostsForUser(
 }
 
 async function main() {
+    initPluginLog('instagram');
     const config = await loadConfig();
     const paths = getResolvedPaths(config);
 

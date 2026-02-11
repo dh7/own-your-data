@@ -11,6 +11,7 @@ import { Contact, CONTACT_SCHEMA } from '../../shared/contact';
 import { LinkedinMessage, MESSAGE_SCHEMA } from './types';
 import { loadLinkedInContacts, loadLinkedInMessages } from './utils';
 import { writeIfChanged } from '../../shared/write-if-changed';
+import { initPluginLog } from '../../shared/plugin-logger';
 
 function generateContactMarkdown(contacts: Contact[], exportDate: string): string {
     const lines: string[] = [
@@ -112,6 +113,7 @@ function generateMessageMarkdown(messages: LinkedinMessage[], exportDate: string
 }
 
 async function main() {
+    initPluginLog('linkedin');
     console.log('💼 LinkedIn Process - Generating MindCache files\n');
 
     const config = await loadConfig();

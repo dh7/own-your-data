@@ -123,6 +123,7 @@ export function renderTemplate(
             <code>npm run transcript:process</code> - Transcribe audio files<br>
             <code>npm run transcript:push</code> - Sync to GitHub
         </p>
+        <button type="button" class="btn small-btn secondary" onclick="viewPluginLogs('transcripts')" style="margin-top: 0.5rem;">📋 View Logs</button>
     </div>
 </details>
 `;
