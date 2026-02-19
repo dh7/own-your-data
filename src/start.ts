@@ -169,15 +169,38 @@ function launchConfig(): void {
     });
 }
 
+const MAX_SCHEDULER_RETRIES = 10;
+let schedulerRestartCount = 0;
+let schedulerLastStart = 0;
+
 function launchScheduler(): void {
     console.log('🤖 Starting scheduler daemon...');
+    schedulerLastStart = Date.now();
     schedulerProcess = spawnScript('scheduler');
     schedulerStartedHere = true;
 
     schedulerProcess.on('exit', (code, signal) => {
         schedulerProcess = null;
         if (shuttingDown) return;
-        console.log(`ℹ️ Scheduler exited (${signal || code}).`);
+
+        const uptime = Date.now() - schedulerLastStart;
+
+        if (uptime > FAST_EXIT_MS) {
+            schedulerRestartCount = 0;
+        } else {
+            schedulerRestartCount++;
+        }
+
+        if (schedulerRestartCount >= MAX_SCHEDULER_RETRIES) {
+            console.error(`❌ Scheduler crashed ${schedulerRestartCount} times quickly — giving up.`);
+            return;
+        }
+
+        const delay = uptime > FAST_EXIT_MS ? 2_000 : Math.min(2_000 * Math.pow(2, schedulerRestartCount), 300_000);
+        console.log(`⚠️ Scheduler exited (${signal || code}). Restarting in ${Math.round(delay / 1000)}s...`);
+        setTimeout(() => {
+            if (!shuttingDown) launchScheduler();
+        }, delay);
     });
 }
 
@@ -249,7 +272,7 @@ async function main(): Promise<void> {
     // Config server
     if (existing.configRunning && restartConfig) {
         console.log('   Stopping config server...');
-        await fetch('http://127.0.0.1:3456/shutdown', { method: 'POST' }).catch(() => {});
+        await fetch('http://127.0.0.1:3456/shutdown', { method: 'POST' }).catch(() => { });
         await new Promise(resolve => setTimeout(resolve, 1500));
         launchConfig();
     } else if (!existing.configRunning) {
