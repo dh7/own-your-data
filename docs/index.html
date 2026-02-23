@@ -321,28 +321,6 @@
             align-items: center;
             gap: 1rem;
         }
-
-        .discord-btn {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.4rem;
-            background: #5865F2;
-            color: white;
-            border: none;
-            padding: 0.5rem 1rem;
-            font-size: 0.875rem;
-            font-weight: 600;
-            font-family: 'JetBrains Mono', monospace;
-            border-radius: 6px;
-            cursor: pointer;
-            text-decoration: none;
-            transition: background 0.2s;
-        }
-
-        .discord-btn:hover {
-            background: #4752c4;
-            text-decoration: none;
-        }
     </style>
 </head>
 
@@ -351,7 +329,7 @@
         <div class="header">
             <h1>Own Your Data</h1>
             <div class="header-actions">
-                <a href="https://discord.gg/gpWGbfX5ZX" target="_blank" class="discord-btn">💬 Join Discord</a>
+
                 <iframe
                     src="https://ghbtns.com/github-btn.html?user=dh7&repo=own-your-data&type=star&count=true&size=large"
                     frameborder="0" scrolling="0" width="170" height="30" title="GitHub"></iframe>
@@ -428,7 +406,8 @@
         <div class="features">
             <div class="feature">
                 <strong>🧩 Plugin Architecture</strong>
-                <span>Each plugin is self-contained with its own manifest, config, and commands. Works standalone or with the scheduler.</span>
+                <span>Each plugin is self-contained with its own manifest, config, and commands. Works standalone or
+                    with the scheduler.</span>
             </div>
             <div class="feature">
                 <strong>🤖 Scheduler Daemon</strong>
@@ -440,15 +419,19 @@
             </div>
             <div class="feature">
                 <strong>🔌 Server Management</strong>
-                <span>Long-running plugin servers (WhatsApp, Chrome History) auto-start with crash recovery and backoff.</span>
+                <span>Long-running plugin servers (WhatsApp, Chrome History) auto-start with crash recovery and
+                    backoff.</span>
             </div>
             <div class="feature">
                 <strong>☁️ Remote Access</strong>
-                <span>Optional Cloudflare tunnel to securely expose services (e.g. Chrome History) to the internet.</span>
+                <span>Optional Cloudflare tunnel to securely expose services (e.g. Chrome History) to the
+                    internet.</span>
             </div>
             <div class="feature">
                 <strong>📦 One Command</strong>
-                <span><code style="background:#30363d;padding:0.15rem 0.4rem;border-radius:4px;font-size:0.75rem;">npm run start</code> launches config UI + scheduler + all managed servers.</span>
+                <span><code
+                        style="background:#30363d;padding:0.15rem 0.4rem;border-radius:4px;font-size:0.75rem;">npm run start</code>
+                    launches config UI + scheduler + all managed servers.</span>
             </div>
         </div>
 
