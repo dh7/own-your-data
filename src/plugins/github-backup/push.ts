@@ -110,6 +110,30 @@ async function main() {
     }
 
     try {
+        // Get current branch name
+        const branch = git('rev-parse --abbrev-ref HEAD', workDir);
+
+        // Pull remote changes first (rebase to keep history clean).
+        // This prevents "rejected - fetch first" errors when another
+        // source (e.g. Vercel cron) pushes to the same repo.
+        try {
+            console.log('🔄 Pulling remote changes...');
+            git(`pull --rebase origin ${branch}`, workDir);
+            console.log('✅ Up to date with remote.\n');
+        } catch (pullErr: any) {
+            // If pull fails due to uncommitted changes, stash → pull → pop
+            if (pullErr.message?.includes('unstaged changes') || pullErr.message?.includes('uncommitted changes')) {
+                console.log('📦 Stashing local changes before pull...');
+                git('stash --include-untracked', workDir);
+                git(`pull --rebase origin ${branch}`, workDir);
+                git('stash pop', workDir);
+                console.log('✅ Pulled and restored local changes.\n');
+            } else {
+                // If remote doesn't exist yet (first push), that's fine
+                console.log(`⚠️ Pull skipped: ${pullErr.message}\n`);
+            }
+        }
+
         // Add files
         git(`add "${addPath}"`, workDir);
 
@@ -123,9 +147,6 @@ async function main() {
 
         // Commit
         git(`commit -m "${message}"`, workDir);
-
-        // Get current branch name
-        const branch = git('rev-parse --abbrev-ref HEAD', workDir);
 
         // Push
         git(`push -u origin ${branch}`, workDir);
