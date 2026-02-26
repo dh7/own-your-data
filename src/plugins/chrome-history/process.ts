@@ -74,8 +74,25 @@ async function main() {
         const filePath = path.join(rawDumpsDir, file);
         try {
             const content = await fs.readFile(filePath, 'utf-8');
-            const urls: UrlEntry[] = JSON.parse(content);
-            urlsByDate.set(dateStr, urls);
+            if (!content.trim()) {
+                console.warn(`   ⚠️ Skipping ${file}: file is empty`);
+                continue;
+            }
+
+            let parsed: unknown;
+            try {
+                parsed = JSON.parse(content);
+            } catch {
+                console.warn(`   ⚠️ Skipping ${file}: invalid JSON`);
+                continue;
+            }
+
+            if (!Array.isArray(parsed)) {
+                console.warn(`   ⚠️ Skipping ${file}: expected JSON array`);
+                continue;
+            }
+
+            urlsByDate.set(dateStr, parsed as UrlEntry[]);
         } catch (e) {
             console.error(`   Error reading ${file}:`, e);
         }
