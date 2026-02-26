@@ -29,6 +29,10 @@ config.json
 config/*.json
 !config/*.example.json
 
+# Local credential/session files
+instagram-state.json
+twitter-creds.json
+
 # Environment
 .env
 .env.local
@@ -36,10 +40,13 @@ config/*.json
 # OS files
 .DS_Store
 Thumbs.db
+__MACOSX/
+
+# Local backups
+conector_data_backup/
 
 # IDE
 .idea/
 .vscode/
 *.swp
 *.swo
-
