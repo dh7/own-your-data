@@ -3,14 +3,17 @@
  */
 
 interface LayoutOptions {
-    modals?: string[];
-    initialPluginPanel?: string;
+  modals?: string[];
+  initialPluginPanel?: string;
 }
 
-export function renderLayout(sections: string[], options: LayoutOptions = {}): string {
-    const modalsHtml = options.modals?.join('\n') ?? '';
-    const initialPluginPanel = options.initialPluginPanel ?? '';
-    return `
+export function renderLayout(
+  sections: string[],
+  options: LayoutOptions = {},
+): string {
+  const modalsHtml = options.modals?.join("\n") ?? "";
+  const initialPluginPanel = options.initialPluginPanel ?? "";
+  return `
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -674,7 +677,7 @@ export function renderLayout(sections: string[], options: LayoutOptions = {}): s
 <body>
     <div class="container">
         <h1>Own your data <div class="header-actions"><a href="https://discord.gg/gpWGbfX5ZX" target="_blank" class="discord-btn">💬 Join Discord</a><button onclick="closeConfig()" class="close-btn">✕ Close</button></div></h1>
-        ${sections.join('\n')}
+        ${sections.join("\n")}
     </div>
     ${modalsHtml}
 
@@ -843,8 +846,11 @@ export function renderLayout(sections: string[], options: LayoutOptions = {}): s
             const data = await res.json();
             
             if (!data.fetchSucceeded) {
-                // Fetch failed - warn user
-                statusEl.innerHTML = '⚠️ Could not reach GitHub (SSH auth may be required).<br/>Run <code>ssh-add ~/.ssh/id_rsa</code> to add your key, or check network.';
+                // Fetch failed - warn user with error detail
+                const err = (data.fetchError || 'Unknown fetch error').split('\n')[0];
+                statusEl.innerHTML = '⚠️ Could not reach remote for update check.<br/>' +
+                    '<code>' + err.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</code><br/>' +
+                    'If origin uses SSH, make sure your key has access (or switch origin to HTTPS for read-only checks).';
                 statusEl.style.color = '#f0a030';
             } else if (data.updateAvailable) {
                 const localShort = data.currentCommit.substring(0, 7);
