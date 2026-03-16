@@ -19,6 +19,7 @@ const CWD = process.cwd();
 const NPM_CMD = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const SCHEDULER_PID_PATH = path.join(CWD, 'logs', 'scheduler.pid');
 const TUNNEL_PID_PATH = path.join(CWD, 'logs', 'tunnel.pid');
+const CONFIG_PORT = 3777;
 
 let shuttingDown = false;
 let configProcess: ChildProcess | null = null;
@@ -109,7 +110,7 @@ interface ExistingServices {
 }
 
 async function detectExisting(): Promise<ExistingServices> {
-    const configRunning = await isPortInUse(3456);
+    const configRunning = await isPortInUse(CONFIG_PORT);
 
     const schedulerPid = await readPidFile(SCHEDULER_PID_PATH);
     const schedulerRunning = schedulerPid !== null && isPidAlive(schedulerPid);
@@ -157,7 +158,7 @@ function launchConfig(): void {
         }
 
         if (configRestartCount >= MAX_CONFIG_RETRIES) {
-            console.error(`❌ Config server crashed ${configRestartCount} times quickly — giving up. Check if port 3456 is in use.`);
+            console.error(`❌ Config server crashed ${configRestartCount} times quickly — giving up. Check if port ${CONFIG_PORT} is in use.`);
             return;
         }
 
@@ -253,7 +254,7 @@ async function main(): Promise<void> {
     let restartTunnel = !existing.tunnelRunning || !tunnelConfigured;
 
     if (existing.configRunning) {
-        const a = await ask('🧩 Config server is already running on port 3456. Restart it? [y/N] ');
+        const a = await ask(`🧩 Config server is already running on port ${CONFIG_PORT}. Restart it? [y/N] `);
         restartConfig = a === 'y' || a === 'yes';
     }
 
@@ -272,7 +273,7 @@ async function main(): Promise<void> {
     // Config server
     if (existing.configRunning && restartConfig) {
         console.log('   Stopping config server...');
-        await fetch('http://127.0.0.1:3456/shutdown', { method: 'POST' }).catch(() => { });
+        await fetch(`http://127.0.0.1:${CONFIG_PORT}/shutdown`, { method: 'POST' }).catch(() => { });
         await new Promise(resolve => setTimeout(resolve, 1500));
         launchConfig();
     } else if (!existing.configRunning) {

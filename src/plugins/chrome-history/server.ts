@@ -16,7 +16,7 @@ import * as crypto from 'crypto';
 
 // Project root is 3 levels up from this file (src/plugins/chrome-history/)
 const PROJECT_ROOT = path.join(__dirname, '..', '..', '..');
-const PORT = 3457; // Different from config server (3456)
+const PORT = 3457; // Different from config server (3777)
 const RAW_DUMPS_DIR = path.join(PROJECT_ROOT, 'raw-dumps', 'chrome-history');
 const API_KEY_FILE = path.join(PROJECT_ROOT, 'auth', 'chrome-api-key.txt');
 

@@ -80,7 +80,7 @@ import {
 } from "../scheduler/config";
 
 const app = express();
-const PORT = 3456;
+const PORT = 3777;
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));

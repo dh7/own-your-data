@@ -34,7 +34,7 @@ npm install
 npm run start
 ```
 
-That starts the config UI at `http://localhost:3456` and runs the scheduler daemon, which will automatically:
+That starts the config UI at `http://localhost:3777` and runs the scheduler daemon, which will automatically:
 - Run each plugin's `get → process → push` commands on schedule
 - Respect active hours (7:00 - 23:00)
 - Add random delays to mimic human behavior

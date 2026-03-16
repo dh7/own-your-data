@@ -6,7 +6,7 @@
 
 ```
 start.ts
- ├── config server    (npm run config)     → port 3456
+ ├── config server    (npm run config)     → port 3777
  ├── scheduler daemon (npm run scheduler)  → manages plugin servers + scheduled jobs
  └── tunnel server    (npm run tunnel)     → optional, if configured
 ```
