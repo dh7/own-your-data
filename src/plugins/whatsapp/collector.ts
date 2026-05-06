@@ -224,6 +224,50 @@ export async function collectRawMessages(
       syncFullHistory: false,
     });
 
+    // ============================================================
+    // READ-ONLY ENFORCEMENT
+    // OYD scrapes Damien's personal WhatsApp account. It must NEVER
+    // send anything outbound. We monkey-patch every send-like method
+    // on the Baileys socket so any accidental call (by us, by a future
+    // refactor, or by a compromised dependency) throws loudly instead
+    // of leaking messages.
+    // ============================================================
+    const FORBIDDEN_METHODS = [
+      "sendMessage",
+      "sendPresenceUpdate",
+      "sendReceipt",
+      "sendReceipts",
+      "readMessages",       // marks messages read — also leaks online status
+      "relayMessage",
+      "chatModify",
+      "groupCreate",
+      "groupLeave",
+      "groupParticipantsUpdate",
+      "groupUpdateSubject",
+      "groupUpdateDescription",
+      "groupSettingUpdate",
+      "groupToggleEphemeral",
+      "updateProfilePicture",
+      "updateProfileStatus",
+      "updateProfileName",
+      "updateBlockStatus",
+      "sendStatusBroadcast",
+    ] as const;
+    for (const m of FORBIDDEN_METHODS) {
+      const sockAny = sock as unknown as Record<string, unknown>;
+      if (typeof sockAny[m] === "function") {
+        sockAny[m] = (...args: unknown[]) => {
+          const err = new Error(
+            `OYD WhatsApp is READ-ONLY. Refusing to call sock.${m}(). ` +
+            `Args: ${JSON.stringify(args).slice(0, 200)}`,
+          );
+          console.error("🚫", err.message);
+          throw err;
+        };
+      }
+    }
+    console.log("🔒 Read-only mode: " + FORBIDDEN_METHODS.length + " send-like methods on Baileys socket are disabled");
+
     sock.ev.on("creds.update", saveCreds);
 
     return new Promise((resolve, reject) => {
