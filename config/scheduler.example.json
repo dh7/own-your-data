@@ -23,32 +23,60 @@
   },
   "tasks": [
     {
-      "plugins": ["twitter", "instagram"],
-      "commands": ["get", "process", "push"],
-      "intervalHours": 6,
-      "jitterMinutes": 30
+      "plugins": [
+        "twitter",
+        "instagram"
+      ],
+      "commands": [
+        "get",
+        "process",
+        "push"
+      ],
+      "intervalHours": 2,
+      "jitterMinutes": 90
     },
     {
-      "plugins": ["whatsapp"],
-      "commands": ["process", "push"],
+      "plugins": [
+        "whatsapp"
+      ],
+      "commands": [
+        "process",
+        "push"
+      ],
       "intervalHours": 1,
       "jitterMinutes": 10
     },
     {
-      "plugins": ["chrome-history"],
-      "commands": ["push"],
+      "plugins": [
+        "chrome-history"
+      ],
+      "commands": [
+        "push"
+      ],
       "intervalHours": 24,
       "jitterMinutes": 60
     },
     {
-      "plugins": ["transcripts"],
-      "commands": ["process", "push"],
+      "plugins": [
+        "transcripts"
+      ],
+      "commands": [
+        "process",
+        "push"
+      ],
       "intervalHours": 12,
       "jitterMinutes": 30
     },
     {
-      "plugins": ["linkedin", "google-contacts", "openai"],
-      "commands": ["process", "push"],
+      "plugins": [
+        "linkedin",
+        "google-contacts",
+        "openai"
+      ],
+      "commands": [
+        "process",
+        "push"
+      ],
       "schedule": "manual"
     }
   ]

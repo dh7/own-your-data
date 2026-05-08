@@ -50,3 +50,4 @@ conector_data_backup/
 .vscode/
 *.swp
 *.swo
+.playwright-cache/
